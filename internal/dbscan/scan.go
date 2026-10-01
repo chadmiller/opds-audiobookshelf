@@ -6,13 +6,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	_ "modernc.org/sqlite"
 
 	"github.com/chadmiller/audiobookshelf-opds-server/internal/model"
 )
 
-const query = `
+const queryTemplate = `
 SELECT
 	li.id,
 	li.path,
@@ -37,7 +38,7 @@ SELECT
 FROM "libraryItems" li
 JOIN "libraries" l ON li.libraryId = l.id
 JOIN "books" b ON li.mediaId = b.id
-WHERE l.name = 'ebooks'
+WHERE l.name IN (%s)
 	AND li.mediaType = 'book'
 	AND li.isFile = 0
 	AND COALESCE(li.isMissing, 0) = 0
@@ -45,9 +46,22 @@ WHERE l.name = 'ebooks'
 	AND b.ebookFile IS NOT NULL
 `
 
-// Scan opens dbPath read-only, runs the ebooks-library query, and returns the
-// resulting catalog. The database connection is closed before returning.
-func Scan(dbPath string) ([]model.Book, error) {
+// Scan opens dbPath read-only, runs the library query restricted to
+// libraryNames, and returns the resulting catalog. The database connection
+// is closed before returning.
+func Scan(dbPath string, libraryNames []string) ([]model.Book, error) {
+	if len(libraryNames) == 0 {
+		return nil, fmt.Errorf("no library names given")
+	}
+
+	placeholders := make([]string, len(libraryNames))
+	args := make([]any, len(libraryNames))
+	for i, name := range libraryNames {
+		placeholders[i] = "?"
+		args[i] = name
+	}
+	query := fmt.Sprintf(queryTemplate, strings.Join(placeholders, ", "))
+
 	dsn := fmt.Sprintf("file:%s?mode=ro&immutable=0", dbPath)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -55,7 +69,7 @@ func Scan(dbPath string) ([]model.Book, error) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query(query)
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query ebooks: %w", err)
 	}

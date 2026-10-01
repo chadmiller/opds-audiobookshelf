@@ -1,5 +1,5 @@
-// Command server runs an unauthenticated OPDS 2.0 catalog for the "ebooks"
-// library of an Audiobookshelf instance, reading directly from its sqlite
+// Command server runs an unauthenticated OPDS catalog for the configured
+// libraries of an Audiobookshelf instance, reading directly from its sqlite
 // database.
 package main
 
@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/chadmiller/audiobookshelf-opds-server/internal/bookmeta"
@@ -23,6 +24,7 @@ func main() {
 	filesRoot := flag.String("files-root", "", "filesystem directory that stands in for the root of the filesystem as seen inside the Audiobookshelf container (required)")
 	addr := flag.String("addr", ":8080", "address to listen on")
 	title := flag.String("title", "Audiobookshelf Ebooks", "title of the OPDS catalog")
+	libraries := flag.String("libraries", "ebooks", "comma-separated list of Audiobookshelf library names to expose")
 	scanInterval := flag.Duration("scan-interval", 60*time.Minute, "how often to rescan the database")
 	flag.Parse()
 
@@ -30,15 +32,20 @@ func main() {
 		flag.Usage()
 		log.Fatal("-db and -files-root are required")
 	}
+	libraryNames := splitLibraryNames(*libraries)
+	if len(libraryNames) == 0 {
+		flag.Usage()
+		log.Fatal("-libraries must name at least one library")
+	}
 
 	store := catalog.NewStore()
-	runScan(store, *dbPath, *filesRoot)
+	runScan(store, *dbPath, *filesRoot, libraryNames)
 
 	go func() {
 		ticker := time.NewTicker(*scanInterval)
 		defer ticker.Stop()
 		for range ticker.C {
-			runScan(store, *dbPath, *filesRoot)
+			runScan(store, *dbPath, *filesRoot, libraryNames)
 		}
 	}()
 
@@ -49,8 +56,18 @@ func main() {
 	}
 }
 
-func runScan(store *catalog.Store, dbPath, filesRoot string) {
-	books, err := dbscan.Scan(dbPath)
+func splitLibraryNames(s string) []string {
+	var names []string
+	for _, name := range strings.Split(s, ",") {
+		if name = strings.TrimSpace(name); name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func runScan(store *catalog.Store, dbPath, filesRoot string, libraryNames []string) {
+	books, err := dbscan.Scan(dbPath, libraryNames)
 	if err != nil {
 		log.Printf("scan failed: %v", err)
 		return
