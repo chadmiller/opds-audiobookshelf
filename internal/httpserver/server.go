@@ -14,13 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chadmiller/audiobookshelf-opds-server/internal/atom"
-	"github.com/chadmiller/audiobookshelf-opds-server/internal/bookmeta"
-	"github.com/chadmiller/audiobookshelf-opds-server/internal/catalog"
-	"github.com/chadmiller/audiobookshelf-opds-server/internal/model"
-	"github.com/chadmiller/audiobookshelf-opds-server/internal/opds"
-	"github.com/chadmiller/audiobookshelf-opds-server/internal/pathmap"
-	"github.com/chadmiller/audiobookshelf-opds-server/internal/placeholder"
+	"github.com/chadmiller/opds-audiobookshelf/internal/atom"
+	"github.com/chadmiller/opds-audiobookshelf/internal/bookmeta"
+	"github.com/chadmiller/opds-audiobookshelf/internal/catalog"
+	"github.com/chadmiller/opds-audiobookshelf/internal/model"
+	"github.com/chadmiller/opds-audiobookshelf/internal/opds"
+	"github.com/chadmiller/opds-audiobookshelf/internal/pathmap"
+	"github.com/chadmiller/opds-audiobookshelf/internal/placeholder"
 )
 
 // Server serves the OPDS catalog and the files it references.

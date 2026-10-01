@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/chadmiller/audiobookshelf-opds-server/internal/model"
+	"github.com/chadmiller/opds-audiobookshelf/internal/model"
 )
 
 // HostPath re-roots containerPath (an absolute path as Audiobookshelf

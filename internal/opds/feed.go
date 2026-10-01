@@ -5,9 +5,9 @@ package opds
 import (
 	"time"
 
-	"github.com/chadmiller/audiobookshelf-opds-server/internal/bookmeta"
-	"github.com/chadmiller/audiobookshelf-opds-server/internal/model"
-	"github.com/chadmiller/audiobookshelf-opds-server/internal/placeholder"
+	"github.com/chadmiller/opds-audiobookshelf/internal/bookmeta"
+	"github.com/chadmiller/opds-audiobookshelf/internal/model"
+	"github.com/chadmiller/opds-audiobookshelf/internal/placeholder"
 )
 
 const MediaType = "application/opds+json"

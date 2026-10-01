@@ -10,7 +10,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/chadmiller/audiobookshelf-opds-server/internal/model"
+	"github.com/chadmiller/opds-audiobookshelf/internal/model"
 )
 
 const queryTemplate = `

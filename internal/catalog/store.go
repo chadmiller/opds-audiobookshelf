@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/chadmiller/audiobookshelf-opds-server/internal/model"
+	"github.com/chadmiller/opds-audiobookshelf/internal/model"
 )
 
 // Store holds the latest scan result.

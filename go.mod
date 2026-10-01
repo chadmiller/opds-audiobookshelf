@@ -1,4 +1,4 @@
-module github.com/chadmiller/audiobookshelf-opds-server
+module github.com/chadmiller/opds-audiobookshelf
 
 go 1.26.6
 

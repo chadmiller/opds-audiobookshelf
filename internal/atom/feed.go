@@ -7,9 +7,9 @@ import (
 	"encoding/xml"
 	"time"
 
-	"github.com/chadmiller/audiobookshelf-opds-server/internal/bookmeta"
-	"github.com/chadmiller/audiobookshelf-opds-server/internal/model"
-	"github.com/chadmiller/audiobookshelf-opds-server/internal/placeholder"
+	"github.com/chadmiller/opds-audiobookshelf/internal/bookmeta"
+	"github.com/chadmiller/opds-audiobookshelf/internal/model"
+	"github.com/chadmiller/opds-audiobookshelf/internal/placeholder"
 )
 
 // MediaType is the media type of an OPDS 1.x acquisition feed.

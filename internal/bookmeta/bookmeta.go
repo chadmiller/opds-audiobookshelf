@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chadmiller/audiobookshelf-opds-server/internal/model"
+	"github.com/chadmiller/opds-audiobookshelf/internal/model"
 )
 
 // Identifier returns a stable URN for the book: its ISBN or ASIN if known,
