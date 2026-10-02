@@ -19,7 +19,7 @@ SELECT
 	li.path,
 	li.relPath,
 	li.authorNamesFirstLast,
-	li.authorNamesLastFirst,
+	COALESCE(GROUP_CONCAT(a.lastFirst, '; ' ORDER BY ba.createdAt ASC), '') as authorNamesLastFirst,
 	b.title,
 	b.titleIgnorePrefix,
 	b.subtitle,
@@ -38,12 +38,17 @@ SELECT
 FROM "libraryItems" li
 JOIN "libraries" l ON li.libraryId = l.id
 JOIN "books" b ON li.mediaId = b.id
+LEFT JOIN "bookAuthors" ba ON b.id = ba.bookId
+LEFT JOIN "authors" a ON ba.authorId = a.id
+LEFT JOIN "bookSeries" bs ON b.id = bs.bookId
+LEFT JOIN "series" s ON bs.seriesId = s.id
 WHERE l.name IN (%s)
 	AND li.mediaType = 'book'
 	AND li.isFile = 0
 	AND COALESCE(li.isMissing, 0) = 0
 	AND COALESCE(li.isInvalid, 0) = 0
 	AND b.ebookFile IS NOT NULL
+GROUP BY li.id
 `
 
 // Scan opens dbPath read-only, runs the library query restricted to

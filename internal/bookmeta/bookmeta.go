@@ -141,32 +141,60 @@ type AuthorGroup struct {
 	Books       []model.Book
 }
 
+// splitAuthors splits a semicolon-separated author string into individual
+// author names, trimming whitespace.
+func splitAuthors(authorList string) []string {
+	if authorList == "" {
+		return []string{unknownAuthor}
+	}
+	parts := strings.Split(authorList, "; ")
+	var result []string
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	if len(result) == 0 {
+		return []string{unknownAuthor}
+	}
+	return result
+}
+
 // GroupByAuthor splits a book list already ordered by SortBooks into
 // per-author groups, preserving that order both across and within groups.
+// Books with multiple authors appear in each author's group.
 func GroupByAuthor(books []model.Book) []AuthorGroup {
-	var groups []AuthorGroup
+	authorToID := make(map[string]string)
+	groups := make(map[string]*AuthorGroup)
+	var order []string
 	usedIDs := map[string]bool{}
 
 	for _, b := range books {
-		display := b.AuthorNamesLastFirst
-		if display == "" {
-			display = unknownAuthor
-		}
-		if n := len(groups); n > 0 && groups[n-1].DisplayName == display {
-			groups[n-1].Books = append(groups[n-1].Books, b)
-			continue
-		}
+		authorNames := splitAuthors(b.AuthorNamesLastFirst)
+		for _, display := range authorNames {
+			id, exists := authorToID[display]
+			if !exists {
+				base := authorSlug(display)
+				id = base
+				for i := 2; usedIDs[id]; i++ {
+					id = fmt.Sprintf("%s-%d", base, i)
+				}
+				usedIDs[id] = true
+				authorToID[display] = id
 
-		base := authorSlug(display)
-		id := base
-		for i := 2; usedIDs[id]; i++ {
-			id = fmt.Sprintf("%s-%d", base, i)
+				groups[id] = &AuthorGroup{ID: id, DisplayName: display, Books: []model.Book{}}
+				order = append(order, id)
+			}
+			groups[id].Books = append(groups[id].Books, b)
 		}
-		usedIDs[id] = true
-
-		groups = append(groups, AuthorGroup{ID: id, DisplayName: display, Books: []model.Book{b}})
 	}
-	return groups
+
+	var result []AuthorGroup
+	for _, id := range order {
+		result = append(result, *groups[id])
+	}
+	return result
 }
 
 // authorSlug lowercases name and collapses every run of non-alphanumeric
