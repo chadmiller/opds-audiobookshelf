@@ -34,7 +34,9 @@ SELECT
 	b.tags,
 	b.genres,
 	b.coverPath,
-	b.ebookFile
+	b.ebookFile,
+	COALESCE(s.name, '') as seriesName,
+	COALESCE(bs.sequence, '') as seriesSequence
 FROM "libraryItems" li
 JOIN "libraries" l ON li.libraryId = l.id
 JOIN "books" b ON li.mediaId = b.id
@@ -103,6 +105,8 @@ func Scan(dbPath string, libraryNames []string) ([]model.Book, error) {
 			genresJSON           sql.NullString
 			coverPath            sql.NullString
 			ebookFileJSON        sql.NullString
+			seriesName           sql.NullString
+			seriesSequence       sql.NullString
 		)
 		if err := rows.Scan(
 			&id,
@@ -125,6 +129,8 @@ func Scan(dbPath string, libraryNames []string) ([]model.Book, error) {
 			&genresJSON,
 			&coverPath,
 			&ebookFileJSON,
+			&seriesName,
+			&seriesSequence,
 		); err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)
 		}
@@ -157,6 +163,8 @@ func Scan(dbPath string, libraryNames []string) ([]model.Book, error) {
 			ASIN:                 asin.String,
 			Language:             language.String,
 			CoverPath:            coverPath.String,
+			SeriesName:           seriesName.String,
+			SeriesSequence:       seriesSequence.String,
 			Narrators:            stringSlice(narratorsJSON),
 			Tags:                 stringSlice(tagsJSON),
 			Genres:               stringSlice(genresJSON),

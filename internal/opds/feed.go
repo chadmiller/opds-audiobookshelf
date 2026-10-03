@@ -105,13 +105,14 @@ func BuildFeed(baseURL, selfPath, title string, books []model.Book, updatedAt ti
 		feed.Metadata.Modified = updatedAt.UTC().Format(time.RFC3339)
 	}
 
+	padding := bookmeta.MaxSequencePadding(books)
 	for _, b := range books {
-		feed.Publications = append(feed.Publications, buildPublication(baseURL, b))
+		feed.Publications = append(feed.Publications, buildPublication(baseURL, b, padding))
 	}
 	return feed
 }
 
-func buildPublication(baseURL string, b model.Book) Publication {
+func buildPublication(baseURL string, b model.Book, padding int) Publication {
 	var authors []Author
 	if b.AuthorName != "" {
 		authors = append(authors, Author{Name: b.AuthorName})
@@ -128,7 +129,7 @@ func buildPublication(baseURL string, b model.Book) Publication {
 	pub := Publication{
 		Metadata: PublicationMetadata{
 			Type:        "http://schema.org/Book",
-			Title:       b.Title,
+			Title:       bookmeta.FormatTitle(b, padding),
 			Subtitle:    b.Subtitle,
 			Author:      authors,
 			Narrator:    narrators,

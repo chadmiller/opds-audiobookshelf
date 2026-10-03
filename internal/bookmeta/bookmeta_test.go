@@ -116,3 +116,156 @@ func TestGroupByAuthorMultiAuthorBooks(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatTitleWithSeries(t *testing.T) {
+	tests := []struct {
+		name        string
+		book        model.Book
+		padding     int
+		expected    string
+	}{
+		{
+			name: "no series",
+			book: model.Book{Title: "Dune Messiah"},
+			padding: 2,
+			expected: "Dune Messiah",
+		},
+		{
+			name: "series with single digit, padding 2",
+			book: model.Book{
+				Title:          "Dune Messiah",
+				SeriesName:     "Dune",
+				SeriesSequence: "2",
+			},
+			padding: 2,
+			expected: "(Dune #02) Dune Messiah",
+		},
+		{
+			name: "series with single digit, padding 3",
+			book: model.Book{
+				Title:          "Dune Messiah",
+				SeriesName:     "Dune",
+				SeriesSequence: "2",
+			},
+			padding: 3,
+			expected: "(Dune #002) Dune Messiah",
+		},
+		{
+			name: "series with two digits, padding 2",
+			book: model.Book{
+				Title:          "God Emperor of Dune",
+				SeriesName:     "Dune",
+				SeriesSequence: "10",
+			},
+			padding: 2,
+			expected: "(Dune #10) God Emperor of Dune",
+		},
+		{
+			name: "series with decimal, padding 3",
+			book: model.Book{
+				Title:          "Some Book",
+				SeriesName:     "Series",
+				SeriesSequence: "2.5",
+			},
+			padding: 3,
+			expected: "(Series #002.5) Some Book",
+		},
+		{
+			name: "series with leading zeros in fractional part (preserved)",
+			book: model.Book{
+				Title:          "Book",
+				SeriesName:     "Name",
+				SeriesSequence: "8.005",
+			},
+			padding: 1,
+			expected: "(Name #8.005) Book",
+		},
+		{
+			name: "series with trailing zeros in fractional part (dropped)",
+			book: model.Book{
+				Title:          "Book",
+				SeriesName:     "Name",
+				SeriesSequence: "100.50",
+			},
+			padding: 3,
+			expected: "(Name #100.5) Book",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := FormatTitle(test.book, test.padding)
+			if got != test.expected {
+				t.Errorf("got %q, want %q", got, test.expected)
+			}
+		})
+	}
+}
+
+func TestMaxSequencePadding(t *testing.T) {
+	tests := []struct {
+		name     string
+		books    []model.Book
+		expected int
+	}{
+		{
+			name:     "no books",
+			books:    []model.Book{},
+			expected: 0,
+		},
+		{
+			name:     "no series",
+			books:    []model.Book{{Title: "Book1"}, {Title: "Book2"}},
+			expected: 0,
+		},
+		{
+			name: "single digit series",
+			books: []model.Book{
+				{SeriesSequence: "1"},
+				{SeriesSequence: "5"},
+			},
+			expected: 1,
+		},
+		{
+			name: "double digit series",
+			books: []model.Book{
+				{SeriesSequence: "1"},
+				{SeriesSequence: "10"},
+			},
+			expected: 2,
+		},
+		{
+			name: "triple digit series",
+			books: []model.Book{
+				{SeriesSequence: "5"},
+				{SeriesSequence: "100"},
+			},
+			expected: 3,
+		},
+		{
+			name: "mixed with decimal",
+			books: []model.Book{
+				{SeriesSequence: "1"},
+				{SeriesSequence: "2.5"},
+			},
+			expected: 1,
+		},
+		{
+			name: "decimal with larger whole part",
+			books: []model.Book{
+				{SeriesSequence: "1.5"},
+				{SeriesSequence: "100.15"},
+			},
+			expected: 3,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := MaxSequencePadding(test.books)
+			if got != test.expected {
+				t.Errorf("got %d, want %d", got, test.expected)
+			}
+		})
+	}
+}

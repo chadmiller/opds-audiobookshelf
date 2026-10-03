@@ -112,15 +112,16 @@ func BuildNavigationFeed(baseURL, title string, groups []bookmeta.AuthorGroup, u
 func BuildFeed(baseURL, selfPath, title string, books []model.Book, updatedAt time.Time) Feed {
 	feed := newFeed(baseURL, selfPath, MediaType, title, updatedAt)
 	feed.Entries = make([]Entry, 0, len(books))
+	padding := bookmeta.MaxSequencePadding(books)
 	for _, b := range books {
-		feed.Entries = append(feed.Entries, buildEntry(baseURL, b, feed.Updated))
+		feed.Entries = append(feed.Entries, buildEntry(baseURL, b, feed.Updated, padding))
 	}
 	return feed
 }
 
-func buildEntry(baseURL string, b model.Book, updatedStr string) Entry {
+func buildEntry(baseURL string, b model.Book, updatedStr string, padding int) Entry {
 	entry := Entry{
-		Title:   b.Title,
+		Title:   bookmeta.FormatTitle(b, padding),
 		ID:      bookmeta.Identifier(b),
 		Updated: updatedStr,
 		Issued:  bookmeta.Published(b),

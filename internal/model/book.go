@@ -37,6 +37,8 @@ type Book struct {
 	// Empty if Audiobookshelf didn't record one, in which case Title is
 	// used for sorting instead.
 	TitleIgnorePrefix string
+	SeriesName        string
+	SeriesSequence    string
 	Narrators         []string
 	Tags              []string
 	Genres            []string

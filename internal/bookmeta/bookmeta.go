@@ -14,6 +14,55 @@ import (
 	"github.com/chadmiller/opds-audiobookshelf/internal/model"
 )
 
+// FormatTitle returns the book title with series information prepended if
+// available. Series prefix is formatted as "(Series Name #n)" with zero-padded
+// numbers dynamically sized to fit the largest sequence number.
+func FormatTitle(b model.Book, padding int) string {
+	if b.SeriesName == "" || b.SeriesSequence == "" {
+		return b.Title
+	}
+	paddedSeq := padSequence(b.SeriesSequence, padding)
+	return fmt.Sprintf("(%s #%s) %s", b.SeriesName, paddedSeq, b.Title)
+}
+
+// MaxSequencePadding returns the number of digits needed to zero-pad the
+// whole number part of all sequence numbers in the book list. Returns 0 if
+// no books have sequences or all sequences are single digits.
+func MaxSequencePadding(books []model.Book) int {
+	maxWhole := 0
+	for _, b := range books {
+		if b.SeriesSequence == "" {
+			continue
+		}
+		parts := strings.Split(b.SeriesSequence, ".")
+		wholeLen := len(parts[0])
+		if wholeLen > maxWhole {
+			maxWhole = wholeLen
+		}
+	}
+	return maxWhole
+}
+
+// padSequence zero-pads only the whole number part of a sequence to the
+// given width. Trailing zeros in the fractional part are stripped, but
+// leading zeros are preserved (e.g., "0.05" stays "0.05", not "0.5").
+// Examples with width=3: "2" -> "002", "2.05" -> "002.05", "100.50" -> "100.5"
+func padSequence(seq string, width int) string {
+	if seq == "" || width == 0 {
+		return seq
+	}
+	parts := strings.Split(seq, ".")
+	whole := fmt.Sprintf("%0*s", width, parts[0])
+	if len(parts) == 1 {
+		return whole
+	}
+	frac := strings.TrimRight(parts[1], "0")
+	if frac == "" {
+		frac = "0"
+	}
+	return whole + "." + frac
+}
+
 // Identifier returns a stable URN for the book: its ISBN or ASIN if known,
 // else a URN built from its library item ID.
 func Identifier(b model.Book) string {
@@ -88,13 +137,14 @@ func Published(b model.Book) string {
 	return ""
 }
 
-// SortBooks orders books by author surname, author given name, title, then
-// publishedDate, matching how a physical catalog would be shelved.
+// SortBooks orders books by author surname, author given name, formatted title
+// (with series prefix), then publishedDate, matching how a physical catalog would be shelved.
 func SortBooks(books []model.Book) {
-	sort.SliceStable(books, func(i, j int) bool { return less(books[i], books[j]) })
+	padding := MaxSequencePadding(books)
+	sort.SliceStable(books, func(i, j int) bool { return less(books[i], books[j], padding) })
 }
 
-func less(a, b model.Book) bool {
+func less(a, b model.Book, padding int) bool {
 	aSurname, aGiven := splitSurnameGiven(a.AuthorNamesLastFirst)
 	bSurname, bGiven := splitSurnameGiven(b.AuthorNamesLastFirst)
 
@@ -104,17 +154,18 @@ func less(a, b model.Book) bool {
 	if al, bl := strings.ToLower(aGiven), strings.ToLower(bGiven); al != bl {
 		return al < bl
 	}
-	if al, bl := strings.ToLower(titleSortKey(a)), strings.ToLower(titleSortKey(b)); al != bl {
+	if al, bl := strings.ToLower(titleSortKey(a, padding)), strings.ToLower(titleSortKey(b, padding)); al != bl {
 		return al < bl
 	}
 	return a.PublishedDate < b.PublishedDate
 }
 
-func titleSortKey(b model.Book) string {
-	if b.TitleIgnorePrefix != "" {
+func titleSortKey(b model.Book, padding int) string {
+	formatted := FormatTitle(b, padding)
+	if b.TitleIgnorePrefix != "" && b.SeriesName == "" {
 		return b.TitleIgnorePrefix
 	}
-	return b.Title
+	return formatted
 }
 
 // splitSurnameGiven splits Audiobookshelf's "Surname, Given Name" format
