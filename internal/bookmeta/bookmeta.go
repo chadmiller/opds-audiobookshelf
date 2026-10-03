@@ -248,6 +248,17 @@ func GroupByAuthor(books []model.Book) []AuthorGroup {
 	return result
 }
 
+// stripArticles removes leading English articles ("a", "an", "the") from a title.
+func stripArticles(title string) string {
+	lower := strings.ToLower(strings.TrimSpace(title))
+	for _, article := range []string{"the ", "a ", "an "} {
+		if strings.HasPrefix(lower, article) {
+			return strings.TrimSpace(title[len(article):])
+		}
+	}
+	return title
+}
+
 // authorSlug lowercases name and collapses every run of non-alphanumeric
 // characters into a single hyphen, for use as a URL path segment.
 func authorSlug(name string) string {
@@ -268,4 +279,173 @@ func authorSlug(name string) string {
 		return "author"
 	}
 	return b.String()
+}
+
+// TitleGroup represents books grouped by title
+type TitleGroup struct {
+	Title   string
+	SortKey string
+	Books   []model.Book
+}
+
+// GroupByTitle splits books into groups by their Title (without series prefix),
+// sorted by title (ignoring articles).
+func GroupByTitle(books []model.Book) []TitleGroup {
+	groups := make(map[string]*TitleGroup)
+
+	for _, b := range books {
+		title := b.Title
+		if _, exists := groups[title]; !exists {
+			sortKey := b.TitleIgnorePrefix
+			if sortKey == "" {
+				sortKey = stripArticles(title)
+			}
+			groups[title] = &TitleGroup{Title: title, SortKey: sortKey, Books: []model.Book{}}
+		}
+		groups[title].Books = append(groups[title].Books, b)
+	}
+
+	var result []TitleGroup
+	for _, group := range groups {
+		result = append(result, *group)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return strings.ToLower(result[i].SortKey) < strings.ToLower(result[j].SortKey)
+	})
+	return result
+}
+
+// SeriesGroup represents books grouped by series
+type SeriesGroup struct {
+	ID    string
+	Name  string
+	Books []model.Book
+}
+
+// GroupBySeries splits books into groups by series name, preserving sort order.
+// Books without a series are grouped under "Standalone".
+func GroupBySeries(books []model.Book) []SeriesGroup {
+	const standalone = "Standalone"
+	groups := make(map[string]*SeriesGroup)
+	var order []string
+	usedIDs := map[string]bool{}
+
+	for _, b := range books {
+		seriesName := b.SeriesName
+		if seriesName == "" {
+			seriesName = standalone
+		}
+
+		if _, exists := groups[seriesName]; !exists {
+			id := authorSlug(seriesName)
+			for i := 2; usedIDs[id]; i++ {
+				id = fmt.Sprintf("%s-%d", authorSlug(seriesName), i)
+			}
+			usedIDs[id] = true
+			groups[seriesName] = &SeriesGroup{ID: id, Name: seriesName, Books: []model.Book{}}
+			order = append(order, seriesName)
+		}
+		groups[seriesName].Books = append(groups[seriesName].Books, b)
+	}
+
+	var result []SeriesGroup
+	for _, name := range order {
+		result = append(result, *groups[name])
+	}
+	return result
+}
+
+// AlphaRange represents a character range for browsing
+type AlphaRange struct {
+	ID        string
+	Label     string
+	LeafCount int
+}
+
+// AlphaRanged items can be grouped by alphabetical ranges
+type AlphaRanged interface {
+	GetSortKey() string
+	GetLeafCount() int
+}
+
+// AuthorRangeAdapter makes AuthorGroup compatible with alphabetical grouping
+type AuthorRangeAdapter struct {
+	Group *AuthorGroup
+}
+
+func (a *AuthorRangeAdapter) GetSortKey() string  { return a.Group.DisplayName }
+func (a *AuthorRangeAdapter) GetLeafCount() int   { return len(a.Group.Books) }
+
+// TitleRangeAdapter makes TitleGroup compatible with alphabetical grouping
+type TitleRangeAdapter struct {
+	Group *TitleGroup
+}
+
+func (t *TitleRangeAdapter) GetSortKey() string { return t.Group.SortKey }
+func (t *TitleRangeAdapter) GetLeafCount() int  { return len(t.Group.Books) }
+
+// SeriesRangeAdapter makes SeriesGroup compatible with alphabetical grouping
+type SeriesRangeAdapter struct {
+	Group *SeriesGroup
+}
+
+func (s *SeriesRangeAdapter) GetSortKey() string { return s.Group.Name }
+func (s *SeriesRangeAdapter) GetLeafCount() int  { return len(s.Group.Books) }
+
+// GroupByAlphaRange splits items into alphabetical ranges (a–c, d–g, etc.)
+// if totalLeafCount > threshold. Otherwise returns a single "all" range.
+// The groupName (e.g., "authors", "titles", "series") is used to generate context-aware labels.
+func GroupByAlphaRange(items []AlphaRanged, threshold int, groupName string) (ranges []AlphaRange, grouped map[string][]AlphaRanged) {
+	grouped = make(map[string][]AlphaRanged)
+
+	totalLeaves := 0
+	for _, item := range items {
+		totalLeaves += item.GetLeafCount()
+	}
+
+	if totalLeaves <= threshold {
+		ranges = []AlphaRange{{ID: "all", Label: "All", LeafCount: totalLeaves}}
+		grouped["all"] = items
+		return
+	}
+
+	rangeConfigs := []struct {
+		id      string
+		idRange string
+		check   func(r rune) bool
+	}{
+		{"a-c", "a–c", func(r rune) bool { return r >= 'a' && r <= 'c' }},
+		{"d-g", "d–g", func(r rune) bool { return r >= 'd' && r <= 'g' }},
+		{"h-k", "h–k", func(r rune) bool { return r >= 'h' && r <= 'k' }},
+		{"l-o", "l–o", func(r rune) bool { return r >= 'l' && r <= 'o' }},
+		{"p-r", "p–r", func(r rune) bool { return r >= 'p' && r <= 'r' }},
+		{"s-u", "s–u", func(r rune) bool { return r >= 's' && r <= 'u' }},
+		{"v-z", "v–z", func(r rune) bool { return r >= 'v' && r <= 'z' }},
+		{"0-9", "0–9", func(r rune) bool { return r >= '0' && r <= '9' }},
+		{"other", "other", func(r rune) bool { return !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')) }},
+	}
+
+	for _, rc := range rangeConfigs {
+		var itemsInRange []AlphaRanged
+		for _, item := range items {
+			key := strings.ToLower(item.GetSortKey())
+			if len(key) > 0 && rc.check(rune(key[0])) {
+				itemsInRange = append(itemsInRange, item)
+			}
+		}
+		if len(itemsInRange) > 0 {
+			sort.Slice(itemsInRange, func(i, j int) bool {
+				return strings.ToLower(itemsInRange[i].GetSortKey()) < strings.ToLower(itemsInRange[j].GetSortKey())
+			})
+			leafCount := 0
+			for _, item := range itemsInRange {
+				leafCount += item.GetLeafCount()
+			}
+			label := groupName + " starting " + rc.idRange
+			ranges = append(ranges, AlphaRange{ID: rc.id, Label: label, LeafCount: leafCount})
+			grouped[rc.id] = itemsInRange
+		}
+	}
+
+	return
 }

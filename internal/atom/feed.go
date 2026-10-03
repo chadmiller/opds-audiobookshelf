@@ -5,6 +5,7 @@ package atom
 
 import (
 	"encoding/xml"
+	"fmt"
 	"time"
 
 	"github.com/chadmiller/opds-audiobookshelf/internal/bookmeta"
@@ -120,8 +121,16 @@ func BuildFeed(baseURL, selfPath, title string, books []model.Book, updatedAt ti
 }
 
 func buildEntry(baseURL string, b model.Book, updatedStr string, padding int) Entry {
+	return buildEntryWithSeriesPrefix(baseURL, b, updatedStr, padding, true)
+}
+
+func buildEntryWithSeriesPrefix(baseURL string, b model.Book, updatedStr string, padding int, includeSeriesPrefix bool) Entry {
+	title := b.Title
+	if includeSeriesPrefix {
+		title = bookmeta.FormatTitle(b, padding)
+	}
 	entry := Entry{
-		Title:   bookmeta.FormatTitle(b, padding),
+		Title:   title,
 		ID:      bookmeta.Identifier(b),
 		Updated: updatedStr,
 		Issued:  bookmeta.Published(b),
@@ -151,4 +160,261 @@ func buildEntry(baseURL string, b model.Book, updatedStr string, padding int) En
 	})
 
 	return entry
+}
+
+// BuildRootFeed renders the root catalog as a selection menu with three browse options.
+func BuildRootFeed(baseURL, title string, books []model.Book, updatedAt time.Time) Feed {
+	feed := newFeed(baseURL, "/opds", NavigationMediaType, title, updatedAt)
+	feed.Entries = make([]Entry, 3)
+	feed.Entries[0] = Entry{
+		Title:   fmt.Sprintf("Find books by author (%d)", len(books)),
+		ID:      "urn:opds:browse:authors",
+		Updated: feed.Updated,
+		Links: []Link{
+			{Rel: "subsection", Href: baseURL + "/opds/authors", Type: NavigationMediaType},
+		},
+	}
+	feed.Entries[1] = Entry{
+		Title:   fmt.Sprintf("Find books by title (%d)", len(books)),
+		ID:      "urn:opds:browse:titles",
+		Updated: feed.Updated,
+		Links: []Link{
+			{Rel: "subsection", Href: baseURL + "/opds/titles", Type: NavigationMediaType},
+		},
+	}
+	feed.Entries[2] = Entry{
+		Title:   fmt.Sprintf("Find books by series (%d)", len(books)),
+		ID:      "urn:opds:browse:series",
+		Updated: feed.Updated,
+		Links: []Link{
+			{Rel: "subsection", Href: baseURL + "/opds/series", Type: NavigationMediaType},
+		},
+	}
+	return feed
+}
+
+// BuildAuthorNavigationFeed renders a navigation feed of authors (or ranges).
+func BuildAuthorNavigationFeed(baseURL, title string, books []model.Book, updatedAt time.Time) Feed {
+	groups := bookmeta.GroupByAuthor(books)
+	adapters := make([]bookmeta.AlphaRanged, len(groups))
+	for i := range groups {
+		adapters[i] = &bookmeta.AuthorRangeAdapter{Group: &groups[i]}
+	}
+	ranges, _ := bookmeta.GroupByAlphaRange(adapters, 100, "authors")
+
+	feed := newFeed(baseURL, "/opds/authors", NavigationMediaType, "Authors", updatedAt)
+	feed.Links = append(feed.Links, Link{Rel: "up", Href: baseURL + "/opds", Type: NavigationMediaType})
+
+	feed.Entries = make([]Entry, 0)
+	if len(ranges) == 1 && ranges[0].ID == "all" {
+		for _, group := range groups {
+			feed.Entries = append(feed.Entries, Entry{
+				Title:   fmt.Sprintf("%s (%d)", group.DisplayName, len(group.Books)),
+				ID:      "urn:opds:authors:" + group.ID,
+				Updated: feed.Updated,
+				Links: []Link{
+					{Rel: "subsection", Href: baseURL + "/opds/authors/" + group.ID, Type: MediaType},
+				},
+			})
+		}
+	} else {
+		for _, r := range ranges {
+			feed.Entries = append(feed.Entries, Entry{
+				Title:   fmt.Sprintf("%s (%d)", r.Label, r.LeafCount),
+				ID:      "urn:opds:authors:range:" + r.ID,
+				Updated: feed.Updated,
+				Links: []Link{
+					{Rel: "subsection", Href: baseURL + "/opds/authors/" + r.ID, Type: NavigationMediaType},
+				},
+			})
+		}
+	}
+	return feed
+}
+
+// BuildAuthorRangeFeed renders authors in a specific alphabetical range.
+func BuildAuthorRangeFeed(baseURL string, books []model.Book, rangeID string, updatedAt time.Time) Feed {
+	groups := bookmeta.GroupByAuthor(books)
+	adapters := make([]bookmeta.AlphaRanged, len(groups))
+	for i := range groups {
+		adapters[i] = &bookmeta.AuthorRangeAdapter{Group: &groups[i]}
+	}
+	_, grouped := bookmeta.GroupByAlphaRange(adapters, 100, "authors")
+	rangeItems := grouped[rangeID]
+
+	feed := newFeed(baseURL, "/opds/authors/"+rangeID, NavigationMediaType, "Authors", updatedAt)
+	feed.Links = append(feed.Links, Link{Rel: "up", Href: baseURL + "/opds/authors", Type: NavigationMediaType})
+
+	feed.Entries = make([]Entry, 0, len(rangeItems))
+	for _, adapter := range rangeItems {
+		group := adapter.(*bookmeta.AuthorRangeAdapter).Group
+		feed.Entries = append(feed.Entries, Entry{
+			Title:   fmt.Sprintf("%s (%d)", group.DisplayName, len(group.Books)),
+			ID:      "urn:opds:authors:" + group.ID,
+			Updated: feed.Updated,
+			Links: []Link{
+				{Rel: "subsection", Href: baseURL + "/opds/authors/" + group.ID, Type: MediaType},
+			},
+		})
+	}
+	return feed
+}
+
+// BuildTitleNavigationFeed renders a navigation feed of titles (or ranges).
+func BuildTitleNavigationFeed(baseURL, title string, books []model.Book, updatedAt time.Time) Feed {
+	groups := bookmeta.GroupByTitle(books)
+	adapters := make([]bookmeta.AlphaRanged, len(groups))
+	for i := range groups {
+		adapters[i] = &bookmeta.TitleRangeAdapter{Group: &groups[i]}
+	}
+	ranges, _ := bookmeta.GroupByAlphaRange(adapters, 100, "titles")
+
+	feed := newFeed(baseURL, "/opds/titles", NavigationMediaType, "Titles", updatedAt)
+	feed.Links = append(feed.Links, Link{Rel: "up", Href: baseURL + "/opds", Type: NavigationMediaType})
+
+	feed.Entries = make([]Entry, 0)
+	if len(ranges) == 1 && ranges[0].ID == "all" {
+		for _, group := range groups {
+			feed.Entries = append(feed.Entries, Entry{
+				Title:   fmt.Sprintf("%s (%d)", group.Title, len(group.Books)),
+				ID:      "urn:opds:titles:" + fmt.Sprintf("%x", group.Title),
+				Updated: feed.Updated,
+				Links: []Link{
+					{Rel: "subsection", Href: baseURL + "/opds/titles/" + fmt.Sprintf("%x", group.Title), Type: MediaType},
+				},
+			})
+		}
+	} else {
+		for _, r := range ranges {
+			feed.Entries = append(feed.Entries, Entry{
+				Title:   fmt.Sprintf("%s (%d)", r.Label, r.LeafCount),
+				ID:      "urn:opds:titles:range:" + r.ID,
+				Updated: feed.Updated,
+				Links: []Link{
+					{Rel: "subsection", Href: baseURL + "/opds/titles/" + r.ID, Type: NavigationMediaType},
+				},
+			})
+		}
+	}
+	return feed
+}
+
+// BuildTitleRangeFeed renders all books in a specific alphabetical range as an acquisition feed.
+func BuildTitleRangeFeed(baseURL string, books []model.Book, rangeID string, updatedAt time.Time) Feed {
+	groups := bookmeta.GroupByTitle(books)
+	adapters := make([]bookmeta.AlphaRanged, len(groups))
+	for i := range groups {
+		adapters[i] = &bookmeta.TitleRangeAdapter{Group: &groups[i]}
+	}
+	_, grouped := bookmeta.GroupByAlphaRange(adapters, 100, "titles")
+	rangeItems := grouped[rangeID]
+
+	var booksInRange []model.Book
+	for _, adapter := range rangeItems {
+		group := adapter.(*bookmeta.TitleRangeAdapter).Group
+		booksInRange = append(booksInRange, group.Books...)
+	}
+
+	feed := newFeed(baseURL, "/opds/titles/"+rangeID, MediaType, "Titles", updatedAt)
+	feed.Links = append(feed.Links, Link{Rel: "up", Href: baseURL + "/opds/titles", Type: NavigationMediaType})
+
+	feed.Entries = make([]Entry, 0, len(booksInRange))
+	padding := bookmeta.MaxSequencePadding(booksInRange)
+	for _, b := range booksInRange {
+		feed.Entries = append(feed.Entries, buildEntryWithSeriesPrefix(baseURL, b, feed.Updated, padding, false))
+	}
+	return feed
+}
+
+// BuildTitleFeed renders all books with a specific title as an acquisition feed.
+func BuildTitleFeed(baseURL, titleName string, books []model.Book, updatedAt time.Time) Feed {
+	feed := newFeed(baseURL, "/opds/titles/"+fmt.Sprintf("%x", titleName), MediaType, titleName, updatedAt)
+	feed.Links = append(feed.Links, Link{Rel: "up", Href: baseURL + "/opds/titles", Type: NavigationMediaType})
+
+	feed.Entries = make([]Entry, 0, len(books))
+	padding := bookmeta.MaxSequencePadding(books)
+	for _, b := range books {
+		feed.Entries = append(feed.Entries, buildEntryWithSeriesPrefix(baseURL, b, feed.Updated, padding, false))
+	}
+	return feed
+}
+
+// BuildSeriesNavigationFeed renders a navigation feed of series (or ranges).
+func BuildSeriesNavigationFeed(baseURL, title string, books []model.Book, updatedAt time.Time) Feed {
+	groups := bookmeta.GroupBySeries(books)
+	adapters := make([]bookmeta.AlphaRanged, len(groups))
+	for i := range groups {
+		adapters[i] = &bookmeta.SeriesRangeAdapter{Group: &groups[i]}
+	}
+	ranges, _ := bookmeta.GroupByAlphaRange(adapters, 100, "series")
+
+	feed := newFeed(baseURL, "/opds/series", NavigationMediaType, "Series", updatedAt)
+	feed.Links = append(feed.Links, Link{Rel: "up", Href: baseURL + "/opds", Type: NavigationMediaType})
+
+	feed.Entries = make([]Entry, 0)
+	if len(ranges) == 1 && ranges[0].ID == "all" {
+		for _, group := range groups {
+			feed.Entries = append(feed.Entries, Entry{
+				Title:   fmt.Sprintf("%s (%d)", group.Name, len(group.Books)),
+				ID:      "urn:opds:series:" + group.ID,
+				Updated: feed.Updated,
+				Links: []Link{
+					{Rel: "subsection", Href: baseURL + "/opds/series/" + group.ID, Type: MediaType},
+				},
+			})
+		}
+	} else {
+		for _, r := range ranges {
+			feed.Entries = append(feed.Entries, Entry{
+				Title:   fmt.Sprintf("%s (%d)", r.Label, r.LeafCount),
+				ID:      "urn:opds:series:range:" + r.ID,
+				Updated: feed.Updated,
+				Links: []Link{
+					{Rel: "subsection", Href: baseURL + "/opds/series/" + r.ID, Type: NavigationMediaType},
+				},
+			})
+		}
+	}
+	return feed
+}
+
+// BuildSeriesRangeFeed renders series in a specific alphabetical range.
+func BuildSeriesRangeFeed(baseURL string, books []model.Book, rangeID string, updatedAt time.Time) Feed {
+	groups := bookmeta.GroupBySeries(books)
+	adapters := make([]bookmeta.AlphaRanged, len(groups))
+	for i := range groups {
+		adapters[i] = &bookmeta.SeriesRangeAdapter{Group: &groups[i]}
+	}
+	_, grouped := bookmeta.GroupByAlphaRange(adapters, 100, "series")
+	rangeItems := grouped[rangeID]
+
+	feed := newFeed(baseURL, "/opds/series/"+rangeID, NavigationMediaType, "Series", updatedAt)
+	feed.Links = append(feed.Links, Link{Rel: "up", Href: baseURL + "/opds/series", Type: NavigationMediaType})
+
+	feed.Entries = make([]Entry, 0, len(rangeItems))
+	for _, adapter := range rangeItems {
+		group := adapter.(*bookmeta.SeriesRangeAdapter).Group
+		feed.Entries = append(feed.Entries, Entry{
+			Title:   fmt.Sprintf("%s (%d)", group.Name, len(group.Books)),
+			ID:      "urn:opds:series:" + group.ID,
+			Updated: feed.Updated,
+			Links: []Link{
+				{Rel: "subsection", Href: baseURL + "/opds/series/" + group.ID, Type: MediaType},
+			},
+		})
+	}
+	return feed
+}
+
+// BuildSeriesFeed renders all books in a specific series as an acquisition feed.
+func BuildSeriesFeed(baseURL, seriesID, seriesName string, books []model.Book, updatedAt time.Time) Feed {
+	feed := newFeed(baseURL, "/opds/series/"+seriesID, MediaType, seriesName, updatedAt)
+	feed.Links = append(feed.Links, Link{Rel: "up", Href: baseURL + "/opds/series", Type: NavigationMediaType})
+
+	feed.Entries = make([]Entry, 0, len(books))
+	padding := bookmeta.MaxSequencePadding(books)
+	for _, b := range books {
+		feed.Entries = append(feed.Entries, buildEntry(baseURL, b, feed.Updated, padding))
+	}
+	return feed
 }

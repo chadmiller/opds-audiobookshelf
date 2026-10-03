@@ -41,9 +41,11 @@ func New(store *catalog.Store, filesRoot, title string) *Server {
 		title:     title,
 		mux:       http.NewServeMux(),
 	}
-	s.mux.HandleFunc("/opds", s.handleFeed)
-	s.mux.HandleFunc("/", s.handleFeed)
-	s.mux.HandleFunc("/opds/authors/", s.handleAuthorFeed)
+	s.mux.HandleFunc("/opds", s.handleRoot)
+	s.mux.HandleFunc("/", s.handleRoot)
+	s.mux.HandleFunc("/opds/authors/", s.handleAuthorOrRange)
+	s.mux.HandleFunc("/opds/titles/", s.handleTitleOrRange)
+	s.mux.HandleFunc("/opds/series/", s.handleSeriesOrRange)
 	s.mux.HandleFunc("/download/", s.handleDownload)
 	s.mux.HandleFunc("/covers/", s.handleCover)
 	return s
@@ -53,40 +55,149 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
 }
 
-// handleFeed serves the catalog root as a navigation feed: one entry per
-// author, each linking to that author's acquisition feed (handleAuthorFeed).
-func (s *Server) handleFeed(w http.ResponseWriter, r *http.Request) {
+// handleRoot serves the catalog root as a selection menu with three browse options.
+func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" && r.URL.Path != "/opds" {
 		http.NotFound(w, r)
 		return
 	}
 	books, updatedAt := s.store.Get()
-	groups := bookmeta.GroupByAuthor(books)
 	base := baseURL(r)
 
 	s.writeNegotiatedFeed(w, r,
-		func() opds.Feed { return opds.BuildNavigationFeed(base, s.title, groups, updatedAt) },
-		func() atom.Feed { return atom.BuildNavigationFeed(base, s.title, groups, updatedAt) },
+		func() opds.Feed { return opds.BuildRootFeed(base, s.title, books, updatedAt) },
+		func() atom.Feed { return atom.BuildRootFeed(base, s.title, books, updatedAt) },
 		atom.NavigationMediaType,
 	)
 }
 
-// handleAuthorFeed serves one author's books as an acquisition feed.
-func (s *Server) handleAuthorFeed(w http.ResponseWriter, r *http.Request) {
+// handleAuthorOrRange serves either a navigation feed of authors/ranges (if no ID or
+// if ID is a range like "a-c") or an individual author's books (if ID is a valid author).
+func (s *Server) handleAuthorOrRange(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/opds/authors/")
 	books, updatedAt := s.store.Get()
+	base := baseURL(r)
+
+	if id == "" {
+		s.writeNegotiatedFeed(w, r,
+			func() opds.Feed { return opds.BuildAuthorNavigationFeed(base, s.title, books, updatedAt) },
+			func() atom.Feed { return atom.BuildAuthorNavigationFeed(base, s.title, books, updatedAt) },
+			atom.NavigationMediaType,
+		)
+		return
+	}
+
+	isRange := isAlphaRange(id)
+	if isRange {
+		s.writeNegotiatedFeed(w, r,
+			func() opds.Feed { return opds.BuildAuthorRangeFeed(base, books, id, updatedAt) },
+			func() atom.Feed { return atom.BuildAuthorRangeFeed(base, books, id, updatedAt) },
+			atom.NavigationMediaType,
+		)
+		return
+	}
+
 	group, ok := findAuthorGroup(bookmeta.GroupByAuthor(books), id)
 	if !ok {
 		http.NotFound(w, r)
 		fmt.Println("Failed to find author group", id)
 		return
 	}
-	base := baseURL(r)
 	selfPath := "/opds/authors/" + group.ID
 
 	s.writeNegotiatedFeed(w, r,
 		func() opds.Feed { return opds.BuildFeed(base, selfPath, group.DisplayName, group.Books, updatedAt) },
 		func() atom.Feed { return atom.BuildFeed(base, selfPath, group.DisplayName, group.Books, updatedAt) },
+		atom.MediaType,
+	)
+}
+
+// handleTitleOrRange serves either a navigation feed of titles/ranges or all books with a specific title.
+func (s *Server) handleTitleOrRange(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/opds/titles/")
+	books, updatedAt := s.store.Get()
+	base := baseURL(r)
+
+	if id == "" {
+		s.writeNegotiatedFeed(w, r,
+			func() opds.Feed { return opds.BuildTitleNavigationFeed(base, s.title, books, updatedAt) },
+			func() atom.Feed { return atom.BuildTitleNavigationFeed(base, s.title, books, updatedAt) },
+			atom.NavigationMediaType,
+		)
+		return
+	}
+
+	isRange := isAlphaRange(id)
+	if isRange {
+		s.writeNegotiatedFeed(w, r,
+			func() opds.Feed { return opds.BuildTitleRangeFeed(base, books, id, updatedAt) },
+			func() atom.Feed { return atom.BuildTitleRangeFeed(base, books, id, updatedAt) },
+			atom.MediaType,
+		)
+		return
+	}
+
+	titleName, ok := decodeTitle(id)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	groups := bookmeta.GroupByTitle(books)
+	var titleBooks []model.Book
+	for _, g := range groups {
+		if g.Title == titleName {
+			titleBooks = g.Books
+			break
+		}
+	}
+	if len(titleBooks) == 0 {
+		http.NotFound(w, r)
+		return
+	}
+
+	s.writeNegotiatedFeed(w, r,
+		func() opds.Feed { return opds.BuildTitleFeed(base, titleName, titleBooks, updatedAt) },
+		func() atom.Feed { return atom.BuildTitleFeed(base, titleName, titleBooks, updatedAt) },
+		atom.MediaType,
+	)
+}
+
+// handleSeriesOrRange serves either a navigation feed of series/ranges or all books in a specific series.
+func (s *Server) handleSeriesOrRange(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/opds/series/")
+	books, updatedAt := s.store.Get()
+	base := baseURL(r)
+
+	if id == "" {
+		s.writeNegotiatedFeed(w, r,
+			func() opds.Feed { return opds.BuildSeriesNavigationFeed(base, s.title, books, updatedAt) },
+			func() atom.Feed { return atom.BuildSeriesNavigationFeed(base, s.title, books, updatedAt) },
+			atom.NavigationMediaType,
+		)
+		return
+	}
+
+	isRange := isAlphaRange(id)
+	if isRange {
+		s.writeNegotiatedFeed(w, r,
+			func() opds.Feed { return opds.BuildSeriesRangeFeed(base, books, id, updatedAt) },
+			func() atom.Feed { return atom.BuildSeriesRangeFeed(base, books, id, updatedAt) },
+			atom.NavigationMediaType,
+		)
+		return
+	}
+
+	group, ok := findSeriesGroup(bookmeta.GroupBySeries(books), id)
+	if !ok {
+		http.NotFound(w, r)
+		fmt.Println("Failed to find series group", id)
+		return
+	}
+
+	s.writeNegotiatedFeed(w, r,
+		func() opds.Feed { return opds.BuildSeriesFeed(base, group.ID, group.Name, group.Books, updatedAt) },
+		func() atom.Feed { return atom.BuildSeriesFeed(base, group.ID, group.Name, group.Books, updatedAt) },
 		atom.MediaType,
 	)
 }
@@ -179,6 +290,40 @@ func findAuthorGroup(groups []bookmeta.AuthorGroup, id string) (bookmeta.AuthorG
 		}
 	}
 	return bookmeta.AuthorGroup{}, false
+}
+
+func findSeriesGroup(groups []bookmeta.SeriesGroup, id string) (bookmeta.SeriesGroup, bool) {
+	for _, g := range groups {
+		if g.ID == id {
+			return g, true
+		}
+	}
+	return bookmeta.SeriesGroup{}, false
+}
+
+func isAlphaRange(id string) bool {
+	ranges := map[string]bool{
+		"a-c": true, "d-g": true, "h-k": true, "l-o": true,
+		"p-r": true, "s-u": true, "v-z": true, "0-9": true,
+		"other": true, "all": true,
+	}
+	return ranges[id]
+}
+
+func decodeTitle(encoded string) (string, bool) {
+	var result []rune
+	for i := 0; i < len(encoded); i += 2 {
+		if i+1 >= len(encoded) {
+			return "", false
+		}
+		var b [1]byte
+		_, err := fmt.Sscanf(encoded[i:i+2], "%x", &b[0])
+		if err != nil {
+			return "", false
+		}
+		result = append(result, rune(b[0]))
+	}
+	return string(result), true
 }
 
 func baseURL(r *http.Request) string {
