@@ -393,17 +393,17 @@ func (s *SeriesRangeAdapter) GetSortKey() string { return s.Group.Name }
 func (s *SeriesRangeAdapter) GetLeafCount() int  { return len(s.Group.Books) }
 
 // GroupByAlphaRange splits items into alphabetical ranges (a–c, d–g, etc.)
-// if totalLeafCount > threshold. Otherwise returns a single "all" range.
+// if itemCount > threshold. Otherwise returns a single "all" range.
 // The groupName (e.g., "authors", "titles", "series") is used to generate context-aware labels.
+// The threshold is based on the number of items (authors/titles/series), not the number of books.
 func GroupByAlphaRange(items []AlphaRanged, threshold int, groupName string) (ranges []AlphaRange, grouped map[string][]AlphaRanged) {
 	grouped = make(map[string][]AlphaRanged)
 
-	totalLeaves := 0
-	for _, item := range items {
-		totalLeaves += item.GetLeafCount()
-	}
-
-	if totalLeaves <= threshold {
+	if len(items) <= threshold {
+		totalLeaves := 0
+		for _, item := range items {
+			totalLeaves += item.GetLeafCount()
+		}
 		ranges = []AlphaRange{{ID: "all", Label: "All", LeafCount: totalLeaves}}
 		grouped["all"] = items
 		return
