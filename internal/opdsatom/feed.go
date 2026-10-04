@@ -167,7 +167,7 @@ func BuildRootFeed(baseURL, title string, books []model.Book, updatedAt time.Tim
 	feed := newFeed(baseURL, "/opds", NavigationMediaType, title, updatedAt)
 	feed.Entries = make([]Entry, 3)
 	feed.Entries[0] = Entry{
-		Title:   fmt.Sprintf("Find books by author (%d)", len(books)),
+		Title:   fmt.Sprintf("Find books by author (%d)", len(bookmeta.GroupByAuthor(books))),
 		ID:      "urn:opds:browse:authors",
 		Updated: feed.Updated,
 		Links: []Link{
@@ -175,7 +175,7 @@ func BuildRootFeed(baseURL, title string, books []model.Book, updatedAt time.Tim
 		},
 	}
 	feed.Entries[1] = Entry{
-		Title:   fmt.Sprintf("Find books by title (%d)", len(books)),
+		Title:   fmt.Sprintf("Find books by title (%d)", len(bookmeta.GroupByTitle(books))),
 		ID:      "urn:opds:browse:titles",
 		Updated: feed.Updated,
 		Links: []Link{
@@ -183,7 +183,7 @@ func BuildRootFeed(baseURL, title string, books []model.Book, updatedAt time.Tim
 		},
 	}
 	feed.Entries[2] = Entry{
-		Title:   fmt.Sprintf("Find books by series (%d)", len(books)),
+		Title:   fmt.Sprintf("Find books by series (%d)", len(bookmeta.GroupBySeries(books))),
 		ID:      "urn:opds:browse:series",
 		Updated: feed.Updated,
 		Links: []Link{

@@ -182,8 +182,8 @@ type BrowseOption struct {
 }
 
 // BuildRootFeed renders the root catalog as a selection menu with three browse
-// options: by author, by title, by series. Each option shows the count of leaf
-// nodes (books) reachable through that route.
+// options: by author, by title, by series. Each option shows the count of groups
+// (distinct authors, titles, or series).
 func BuildRootFeed(baseURL, title string, books []model.Book, updatedAt time.Time) Feed {
 
 	feed := Feed{
@@ -198,17 +198,17 @@ func BuildRootFeed(baseURL, title string, books []model.Book, updatedAt time.Tim
 			{
 				Href:  baseURL + "/opds/authors",
 				Type:  MediaType,
-				Title: fmt.Sprintf("Find books by author (%d)", len(books)),
+				Title: fmt.Sprintf("Find books by author (%d)", len(bookmeta.GroupByAuthor(books))),
 			},
 			{
 				Href:  baseURL + "/opds/titles",
 				Type:  MediaType,
-				Title: fmt.Sprintf("Find books by title (%d)", len(books)),
+				Title: fmt.Sprintf("Find books by title (%d)", len(bookmeta.GroupByTitle(books))),
 			},
 			{
 				Href:  baseURL + "/opds/series",
 				Type:  MediaType,
-				Title: fmt.Sprintf("Find books by series (%d)", len(books)),
+				Title: fmt.Sprintf("Find books by series (%d)", len(bookmeta.GroupBySeries(books))),
 			},
 		},
 	}
