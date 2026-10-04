@@ -1,7 +1,7 @@
 // Package atom builds an OPDS 1.x Atom/XML catalog feed out of the scanned
 // book catalog, for clients (e.g. e-readers using Expat-based XML parsers)
 // that don't understand OPDS 2.0 JSON.
-package atom
+package opdsatom
 
 import (
 	"encoding/xml"

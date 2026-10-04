@@ -322,7 +322,7 @@ type SeriesGroup struct {
 	Books []model.Book
 }
 
-// GroupBySeries splits books into groups by series name, preserving sort order.
+// GroupBySeries splits books into groups by series name, sorted alphabetically.
 // Books without a series are grouped under "Standalone".
 func GroupBySeries(books []model.Book) []SeriesGroup {
 	const standalone = "Standalone"
@@ -347,6 +347,10 @@ func GroupBySeries(books []model.Book) []SeriesGroup {
 		}
 		groups[seriesName].Books = append(groups[seriesName].Books, b)
 	}
+
+	sort.Slice(order, func(i, j int) bool {
+		return strings.ToLower(order[i]) < strings.ToLower(order[j])
+	})
 
 	var result []SeriesGroup
 	for _, name := range order {

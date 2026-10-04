@@ -1,6 +1,6 @@
 // Package opds builds an OPDS 2.0 (https://specs.opds.io/opds-2.0.html)
 // JSON catalog feed out of the scanned book catalog.
-package opds
+package opdsjson
 
 import (
 	"fmt"

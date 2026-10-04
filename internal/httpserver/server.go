@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chadmiller/opds-audiobookshelf/internal/atom"
 	"github.com/chadmiller/opds-audiobookshelf/internal/bookmeta"
 	"github.com/chadmiller/opds-audiobookshelf/internal/catalog"
 	"github.com/chadmiller/opds-audiobookshelf/internal/model"
-	"github.com/chadmiller/opds-audiobookshelf/internal/opds"
+	"github.com/chadmiller/opds-audiobookshelf/internal/opdsatom"
+	"github.com/chadmiller/opds-audiobookshelf/internal/opdsjson"
 	"github.com/chadmiller/opds-audiobookshelf/internal/pathmap"
 	"github.com/chadmiller/opds-audiobookshelf/internal/placeholder"
 )
@@ -65,9 +65,9 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	base := baseURL(r)
 
 	s.writeNegotiatedFeed(w, r,
-		func() opds.Feed { return opds.BuildRootFeed(base, s.title, books, updatedAt) },
-		func() atom.Feed { return atom.BuildRootFeed(base, s.title, books, updatedAt) },
-		atom.NavigationMediaType,
+		func() opdsjson.Feed { return opdsjson.BuildRootFeed(base, s.title, books, updatedAt) },
+		func() opdsatom.Feed { return opdsatom.BuildRootFeed(base, s.title, books, updatedAt) },
+		opdsatom.NavigationMediaType,
 	)
 }
 
@@ -80,19 +80,16 @@ func (s *Server) handleAuthorOrRange(w http.ResponseWriter, r *http.Request) {
 
 	if id == "" {
 		s.writeNegotiatedFeed(w, r,
-			func() opds.Feed { return opds.BuildAuthorNavigationFeed(base, s.title, books, updatedAt) },
-			func() atom.Feed { return atom.BuildAuthorNavigationFeed(base, s.title, books, updatedAt) },
-			atom.NavigationMediaType,
+			func() opdsjson.Feed { return opdsjson.BuildAuthorNavigationFeed(base, s.title, books, updatedAt) },
+			func() opdsatom.Feed { return opdsatom.BuildAuthorNavigationFeed(base, s.title, books, updatedAt) },
+			opdsatom.NavigationMediaType,
 		)
 		return
-	}
-
-	isRange := isAlphaRange(id)
-	if isRange {
+	} else if isRange := isAlphaRange(id); isRange {
 		s.writeNegotiatedFeed(w, r,
-			func() opds.Feed { return opds.BuildAuthorRangeFeed(base, books, id, updatedAt) },
-			func() atom.Feed { return atom.BuildAuthorRangeFeed(base, books, id, updatedAt) },
-			atom.NavigationMediaType,
+			func() opdsjson.Feed { return opdsjson.BuildAuthorRangeFeed(base, books, id, updatedAt) },
+			func() opdsatom.Feed { return opdsatom.BuildAuthorRangeFeed(base, books, id, updatedAt) },
+			opdsatom.NavigationMediaType,
 		)
 		return
 	}
@@ -106,9 +103,13 @@ func (s *Server) handleAuthorOrRange(w http.ResponseWriter, r *http.Request) {
 	selfPath := "/opds/authors/" + group.ID
 
 	s.writeNegotiatedFeed(w, r,
-		func() opds.Feed { return opds.BuildFeed(base, selfPath, group.DisplayName, group.Books, updatedAt) },
-		func() atom.Feed { return atom.BuildFeed(base, selfPath, group.DisplayName, group.Books, updatedAt) },
-		atom.MediaType,
+		func() opdsjson.Feed {
+			return opdsjson.BuildFeed(base, selfPath, group.DisplayName, group.Books, updatedAt)
+		},
+		func() opdsatom.Feed {
+			return opdsatom.BuildFeed(base, selfPath, group.DisplayName, group.Books, updatedAt)
+		},
+		opdsatom.MediaType,
 	)
 }
 
@@ -120,47 +121,41 @@ func (s *Server) handleTitleOrRange(w http.ResponseWriter, r *http.Request) {
 
 	if id == "" {
 		s.writeNegotiatedFeed(w, r,
-			func() opds.Feed { return opds.BuildTitleNavigationFeed(base, s.title, books, updatedAt) },
-			func() atom.Feed { return atom.BuildTitleNavigationFeed(base, s.title, books, updatedAt) },
-			atom.NavigationMediaType,
+			func() opdsjson.Feed { return opdsjson.BuildTitleNavigationFeed(base, s.title, books, updatedAt) },
+			func() opdsatom.Feed { return opdsatom.BuildTitleNavigationFeed(base, s.title, books, updatedAt) },
+			opdsatom.NavigationMediaType,
 		)
 		return
-	}
-
-	isRange := isAlphaRange(id)
-	if isRange {
+	} else if isRange := isAlphaRange(id); isRange {
 		s.writeNegotiatedFeed(w, r,
-			func() opds.Feed { return opds.BuildTitleRangeFeed(base, books, id, updatedAt) },
-			func() atom.Feed { return atom.BuildTitleRangeFeed(base, books, id, updatedAt) },
-			atom.MediaType,
+			func() opdsjson.Feed { return opdsjson.BuildTitleRangeFeed(base, books, id, updatedAt) },
+			func() opdsatom.Feed { return opdsatom.BuildTitleRangeFeed(base, books, id, updatedAt) },
+			opdsatom.MediaType,
 		)
 		return
-	}
-
-	titleName, ok := decodeTitle(id)
-	if !ok {
+	} else if titleName, ok := decodeTitle(id); !ok {
 		http.NotFound(w, r)
 		return
-	}
-
-	groups := bookmeta.GroupByTitle(books)
-	var titleBooks []model.Book
-	for _, g := range groups {
-		if g.Title == titleName {
-			titleBooks = g.Books
-			break
+	} else {
+		groups := bookmeta.GroupByTitle(books)
+		var titleBooks []model.Book
+		for _, g := range groups {
+			if g.Title == titleName {
+				titleBooks = g.Books
+				break
+			}
 		}
-	}
-	if len(titleBooks) == 0 {
-		http.NotFound(w, r)
-		return
-	}
+		if len(titleBooks) == 0 {
+			http.NotFound(w, r)
+			return
+		}
 
-	s.writeNegotiatedFeed(w, r,
-		func() opds.Feed { return opds.BuildTitleFeed(base, titleName, titleBooks, updatedAt) },
-		func() atom.Feed { return atom.BuildTitleFeed(base, titleName, titleBooks, updatedAt) },
-		atom.MediaType,
-	)
+		s.writeNegotiatedFeed(w, r,
+			func() opdsjson.Feed { return opdsjson.BuildTitleFeed(base, titleName, titleBooks, updatedAt) },
+			func() opdsatom.Feed { return opdsatom.BuildTitleFeed(base, titleName, titleBooks, updatedAt) },
+			opdsatom.MediaType,
+		)
+	}
 }
 
 // handleSeriesOrRange serves either a navigation feed of series/ranges or all books in a specific series.
@@ -171,35 +166,33 @@ func (s *Server) handleSeriesOrRange(w http.ResponseWriter, r *http.Request) {
 
 	if id == "" {
 		s.writeNegotiatedFeed(w, r,
-			func() opds.Feed { return opds.BuildSeriesNavigationFeed(base, s.title, books, updatedAt) },
-			func() atom.Feed { return atom.BuildSeriesNavigationFeed(base, s.title, books, updatedAt) },
-			atom.NavigationMediaType,
+			func() opdsjson.Feed { return opdsjson.BuildSeriesNavigationFeed(base, s.title, books, updatedAt) },
+			func() opdsatom.Feed { return opdsatom.BuildSeriesNavigationFeed(base, s.title, books, updatedAt) },
+			opdsatom.NavigationMediaType,
 		)
 		return
-	}
-
-	isRange := isAlphaRange(id)
-	if isRange {
+	} else if isRange := isAlphaRange(id); isRange {
 		s.writeNegotiatedFeed(w, r,
-			func() opds.Feed { return opds.BuildSeriesRangeFeed(base, books, id, updatedAt) },
-			func() atom.Feed { return atom.BuildSeriesRangeFeed(base, books, id, updatedAt) },
-			atom.NavigationMediaType,
+			func() opdsjson.Feed { return opdsjson.BuildSeriesRangeFeed(base, books, id, updatedAt) },
+			func() opdsatom.Feed { return opdsatom.BuildSeriesRangeFeed(base, books, id, updatedAt) },
+			opdsatom.NavigationMediaType,
 		)
 		return
-	}
-
-	group, ok := findSeriesGroup(bookmeta.GroupBySeries(books), id)
-	if !ok {
+	} else if group, ok := findSeriesGroup(bookmeta.GroupBySeries(books), id); !ok {
 		http.NotFound(w, r)
 		fmt.Println("Failed to find series group", id)
 		return
+	} else {
+		s.writeNegotiatedFeed(w, r,
+			func() opdsjson.Feed {
+				return opdsjson.BuildSeriesFeed(base, group.ID, group.Name, group.Books, updatedAt)
+			},
+			func() opdsatom.Feed {
+				return opdsatom.BuildSeriesFeed(base, group.ID, group.Name, group.Books, updatedAt)
+			},
+			opdsatom.MediaType,
+		)
 	}
-
-	s.writeNegotiatedFeed(w, r,
-		func() opds.Feed { return opds.BuildSeriesFeed(base, group.ID, group.Name, group.Books, updatedAt) },
-		func() atom.Feed { return atom.BuildSeriesFeed(base, group.ID, group.Name, group.Books, updatedAt) },
-		atom.MediaType,
-	)
 }
 
 // writeNegotiatedFeed renders buildJSON or buildAtom (whichever the
@@ -207,11 +200,11 @@ func (s *Server) handleSeriesOrRange(w http.ResponseWriter, r *http.Request) {
 // Content-Length rather than letting net/http fall back to chunked
 // transfer-encoding, which some minimal OPDS client HTTP stacks don't
 // decode correctly.
-func (s *Server) writeNegotiatedFeed(w http.ResponseWriter, r *http.Request, buildJSON func() opds.Feed, buildAtom func() atom.Feed, atomContentType string) {
+func (s *Server) writeNegotiatedFeed(w http.ResponseWriter, r *http.Request, buildJSON func() opdsjson.Feed, buildAtom func() opdsatom.Feed, atomContentType string) {
 	var buf bytes.Buffer
 	var contentType string
 	if negotiateFeedFormat(r.Header.Get("Accept")) {
-		contentType = opds.MediaType
+		contentType = opdsjson.MediaType
 		enc := json.NewEncoder(&buf)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(buildJSON()); err != nil {
