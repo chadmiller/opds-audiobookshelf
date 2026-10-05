@@ -377,8 +377,8 @@ type AuthorRangeAdapter struct {
 	Group *AuthorGroup
 }
 
-func (a *AuthorRangeAdapter) GetSortKey() string  { return a.Group.DisplayName }
-func (a *AuthorRangeAdapter) GetLeafCount() int   { return len(a.Group.Books) }
+func (a *AuthorRangeAdapter) GetSortKey() string { return a.Group.DisplayName }
+func (a *AuthorRangeAdapter) GetLeafCount() int  { return len(a.Group.Books) }
 
 // TitleRangeAdapter makes TitleGroup compatible with alphabetical grouping
 type TitleRangeAdapter struct {
@@ -418,15 +418,15 @@ func GroupByAlphaRange(items []AlphaRanged, threshold int, groupName string) (ra
 		idRange string
 		check   func(r rune) bool
 	}{
-		{"a-c", "a–c", func(r rune) bool { return r >= 'a' && r <= 'c' }},
-		{"d-g", "d–g", func(r rune) bool { return r >= 'd' && r <= 'g' }},
-		{"h-k", "h–k", func(r rune) bool { return r >= 'h' && r <= 'k' }},
-		{"l-o", "l–o", func(r rune) bool { return r >= 'l' && r <= 'o' }},
-		{"p-r", "p–r", func(r rune) bool { return r >= 'p' && r <= 'r' }},
-		{"s-u", "s–u", func(r rune) bool { return r >= 's' && r <= 'u' }},
-		{"v-z", "v–z", func(r rune) bool { return r >= 'v' && r <= 'z' }},
-		{"0-9", "0–9", func(r rune) bool { return r >= '0' && r <= '9' }},
-		{"other", "other", func(r rune) bool { return !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')) }},
+		{"range/a-c", "a–c", func(r rune) bool { return r >= 'a' && r <= 'c' }},
+		{"range/d-g", "d–g", func(r rune) bool { return r >= 'd' && r <= 'g' }},
+		{"range/h-k", "h–k", func(r rune) bool { return r >= 'h' && r <= 'k' }},
+		{"range/l-o", "l–o", func(r rune) bool { return r >= 'l' && r <= 'o' }},
+		{"range/p-r", "p–r", func(r rune) bool { return r >= 'p' && r <= 'r' }},
+		{"range/s-t", "s–t", func(r rune) bool { return r >= 's' && r <= 't' }},
+		{"range/u-z", "u–z", func(r rune) bool { return r >= 't' && r <= 'z' }},
+		{"range/0-9", "0–9", func(r rune) bool { return r >= '0' && r <= '9' }},
+		{"range/other", "other", func(r rune) bool { return !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')) }},
 	}
 
 	for _, rc := range rangeConfigs {

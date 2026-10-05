@@ -295,12 +295,7 @@ func findSeriesGroup(groups []bookmeta.SeriesGroup, id string) (bookmeta.SeriesG
 }
 
 func isAlphaRange(id string) bool {
-	ranges := map[string]bool{
-		"a-c": true, "d-g": true, "h-k": true, "l-o": true,
-		"p-r": true, "s-u": true, "v-z": true, "0-9": true,
-		"other": true, "all": true,
-	}
-	return ranges[id]
+	return strings.HasPrefix(id, "range/")
 }
 
 func decodeTitle(encoded string) (string, bool) {
