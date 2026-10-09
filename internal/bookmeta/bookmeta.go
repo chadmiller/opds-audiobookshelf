@@ -319,9 +319,10 @@ func GroupByTitle(books []model.Book) []TitleGroup {
 
 // SeriesGroup represents books grouped by series
 type SeriesGroup struct {
-	ID    string
-	Name  string
-	Books []model.Book
+	ID      string
+	Name    string
+	SortKey string
+	Books   []model.Book
 }
 
 // GroupBySeries splits books into groups by series name, sorted alphabetically.
@@ -344,14 +345,15 @@ func GroupBySeries(books []model.Book) []SeriesGroup {
 				id = fmt.Sprintf("%s-%d", authorSlug(seriesName), i)
 			}
 			usedIDs[id] = true
-			groups[seriesName] = &SeriesGroup{ID: id, Name: seriesName, Books: []model.Book{}}
+			sortKey := stripArticles(seriesName)
+			groups[seriesName] = &SeriesGroup{ID: id, Name: seriesName, SortKey: sortKey, Books: []model.Book{}}
 			order = append(order, seriesName)
 		}
 		groups[seriesName].Books = append(groups[seriesName].Books, b)
 	}
 
 	sort.Slice(order, func(i, j int) bool {
-		return strings.ToLower(order[i]) < strings.ToLower(order[j])
+		return strings.ToLower(groups[order[i]].SortKey) < strings.ToLower(groups[order[j]].SortKey)
 	})
 
 	var result []SeriesGroup
@@ -395,7 +397,7 @@ type SeriesRangeAdapter struct {
 	Group *SeriesGroup
 }
 
-func (s *SeriesRangeAdapter) GetSortKey() string { return s.Group.Name }
+func (s *SeriesRangeAdapter) GetSortKey() string { return s.Group.SortKey }
 func (s *SeriesRangeAdapter) GetLeafCount() int  { return len(s.Group.Books) }
 
 // GroupByAlphaRange splits items into alphabetical ranges (a–c, d–g, etc.)

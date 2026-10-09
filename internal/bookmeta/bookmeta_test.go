@@ -269,3 +269,54 @@ func TestMaxSequencePadding(t *testing.T) {
 		})
 	}
 }
+
+func TestGroupBySeriesStripsArticles(t *testing.T) {
+	books := []model.Book{
+		{
+			LibraryItemID: "book1",
+			Title:         "The Expanse",
+			SeriesName:    "The Expanse",
+		},
+		{
+			LibraryItemID: "book2",
+			Title:         "A Series of Events",
+			SeriesName:    "A Series of Events",
+		},
+		{
+			LibraryItemID: "book3",
+			Title:         "An Example",
+			SeriesName:    "An Example",
+		},
+		{
+			LibraryItemID: "book4",
+			Title:         "Chronicles",
+			SeriesName:    "Chronicles",
+		},
+	}
+
+	groups := GroupBySeries(books)
+
+	if len(groups) != 4 {
+		t.Fatalf("expected 4 series groups, got %d", len(groups))
+	}
+
+	// Expected order: Chronicles, Example, Expanse, Series (sorted by stripped sort key)
+	expectedOrder := []struct {
+		name    string
+		sortKey string
+	}{
+		{"Chronicles", "Chronicles"},
+		{"An Example", "Example"},
+		{"The Expanse", "Expanse"},
+		{"A Series of Events", "Series of Events"},
+	}
+
+	for i, expected := range expectedOrder {
+		if groups[i].Name != expected.name {
+			t.Errorf("group %d: expected name %q, got %q", i, expected.name, groups[i].Name)
+		}
+		if groups[i].SortKey != expected.sortKey {
+			t.Errorf("group %d: expected SortKey %q, got %q", i, expected.sortKey, groups[i].SortKey)
+		}
+	}
+}
