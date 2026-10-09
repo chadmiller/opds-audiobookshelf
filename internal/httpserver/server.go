@@ -11,6 +11,7 @@ import (
 	"mime"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,6 +56,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
 }
 
+func getPage(r *http.Request) int {
+	pageStr := r.URL.Query().Get("page")
+	if pageStr == "" {
+		return 1
+	}
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		return 1
+	}
+	return page
+}
+
 // handleRoot serves the catalog root as a selection menu with three browse options.
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" && r.URL.Path != "/opds" {
@@ -77,18 +90,19 @@ func (s *Server) handleAuthorOrRange(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/opds/authors/")
 	books, updatedAt := s.store.Get()
 	base := baseURL(r)
+	page := getPage(r)
 
 	if id == "" {
 		s.writeNegotiatedFeed(w, r,
-			func() opdsjson.Feed { return opdsjson.BuildAuthorNavigationFeed(base, s.title, books, updatedAt) },
-			func() opdsatom.Feed { return opdsatom.BuildAuthorNavigationFeed(base, s.title, books, updatedAt) },
+			func() opdsjson.Feed { return opdsjson.BuildAuthorNavigationFeed(base, s.title, books, page, updatedAt) },
+			func() opdsatom.Feed { return opdsatom.BuildAuthorNavigationFeed(base, s.title, books, page, updatedAt) },
 			opdsatom.NavigationMediaType,
 		)
 		return
 	} else if isRange := isAlphaRange(id); isRange {
 		s.writeNegotiatedFeed(w, r,
-			func() opdsjson.Feed { return opdsjson.BuildAuthorRangeFeed(base, books, id, updatedAt) },
-			func() opdsatom.Feed { return opdsatom.BuildAuthorRangeFeed(base, books, id, updatedAt) },
+			func() opdsjson.Feed { return opdsjson.BuildAuthorRangeFeed(base, books, id, page, updatedAt) },
+			func() opdsatom.Feed { return opdsatom.BuildAuthorRangeFeed(base, books, id, page, updatedAt) },
 			opdsatom.NavigationMediaType,
 		)
 		return
@@ -104,10 +118,10 @@ func (s *Server) handleAuthorOrRange(w http.ResponseWriter, r *http.Request) {
 
 	s.writeNegotiatedFeed(w, r,
 		func() opdsjson.Feed {
-			return opdsjson.BuildFeed(base, selfPath, group.DisplayName, group.Books, updatedAt)
+			return opdsjson.BuildFeed(base, selfPath, group.DisplayName, group.Books, page, updatedAt)
 		},
 		func() opdsatom.Feed {
-			return opdsatom.BuildFeed(base, selfPath, group.DisplayName, group.Books, updatedAt)
+			return opdsatom.BuildFeed(base, selfPath, group.DisplayName, group.Books, page, updatedAt)
 		},
 		opdsatom.MediaType,
 	)
@@ -118,18 +132,19 @@ func (s *Server) handleTitleOrRange(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/opds/titles/")
 	books, updatedAt := s.store.Get()
 	base := baseURL(r)
+	page := getPage(r)
 
 	if id == "" {
 		s.writeNegotiatedFeed(w, r,
-			func() opdsjson.Feed { return opdsjson.BuildTitleNavigationFeed(base, s.title, books, updatedAt) },
-			func() opdsatom.Feed { return opdsatom.BuildTitleNavigationFeed(base, s.title, books, updatedAt) },
+			func() opdsjson.Feed { return opdsjson.BuildTitleNavigationFeed(base, s.title, books, page, updatedAt) },
+			func() opdsatom.Feed { return opdsatom.BuildTitleNavigationFeed(base, s.title, books, page, updatedAt) },
 			opdsatom.NavigationMediaType,
 		)
 		return
 	} else if isRange := isAlphaRange(id); isRange {
 		s.writeNegotiatedFeed(w, r,
-			func() opdsjson.Feed { return opdsjson.BuildTitleRangeFeed(base, books, id, updatedAt) },
-			func() opdsatom.Feed { return opdsatom.BuildTitleRangeFeed(base, books, id, updatedAt) },
+			func() opdsjson.Feed { return opdsjson.BuildTitleRangeFeed(base, books, id, page, updatedAt) },
+			func() opdsatom.Feed { return opdsatom.BuildTitleRangeFeed(base, books, id, page, updatedAt) },
 			opdsatom.MediaType,
 		)
 		return
@@ -151,8 +166,8 @@ func (s *Server) handleTitleOrRange(w http.ResponseWriter, r *http.Request) {
 		}
 
 		s.writeNegotiatedFeed(w, r,
-			func() opdsjson.Feed { return opdsjson.BuildTitleFeed(base, titleName, titleBooks, updatedAt) },
-			func() opdsatom.Feed { return opdsatom.BuildTitleFeed(base, titleName, titleBooks, updatedAt) },
+			func() opdsjson.Feed { return opdsjson.BuildTitleFeed(base, titleName, titleBooks, page, updatedAt) },
+			func() opdsatom.Feed { return opdsatom.BuildTitleFeed(base, titleName, titleBooks, page, updatedAt) },
 			opdsatom.MediaType,
 		)
 	}
@@ -163,18 +178,19 @@ func (s *Server) handleSeriesOrRange(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/opds/series/")
 	books, updatedAt := s.store.Get()
 	base := baseURL(r)
+	page := getPage(r)
 
 	if id == "" {
 		s.writeNegotiatedFeed(w, r,
-			func() opdsjson.Feed { return opdsjson.BuildSeriesNavigationFeed(base, s.title, books, updatedAt) },
-			func() opdsatom.Feed { return opdsatom.BuildSeriesNavigationFeed(base, s.title, books, updatedAt) },
+			func() opdsjson.Feed { return opdsjson.BuildSeriesNavigationFeed(base, s.title, books, page, updatedAt) },
+			func() opdsatom.Feed { return opdsatom.BuildSeriesNavigationFeed(base, s.title, books, page, updatedAt) },
 			opdsatom.NavigationMediaType,
 		)
 		return
 	} else if isRange := isAlphaRange(id); isRange {
 		s.writeNegotiatedFeed(w, r,
-			func() opdsjson.Feed { return opdsjson.BuildSeriesRangeFeed(base, books, id, updatedAt) },
-			func() opdsatom.Feed { return opdsatom.BuildSeriesRangeFeed(base, books, id, updatedAt) },
+			func() opdsjson.Feed { return opdsjson.BuildSeriesRangeFeed(base, books, id, page, updatedAt) },
+			func() opdsatom.Feed { return opdsatom.BuildSeriesRangeFeed(base, books, id, page, updatedAt) },
 			opdsatom.NavigationMediaType,
 		)
 		return
@@ -185,10 +201,10 @@ func (s *Server) handleSeriesOrRange(w http.ResponseWriter, r *http.Request) {
 	} else {
 		s.writeNegotiatedFeed(w, r,
 			func() opdsjson.Feed {
-				return opdsjson.BuildSeriesFeed(base, group.ID, group.Name, group.Books, updatedAt)
+				return opdsjson.BuildSeriesFeed(base, group.ID, group.Name, group.Books, page, updatedAt)
 			},
 			func() opdsatom.Feed {
-				return opdsatom.BuildSeriesFeed(base, group.ID, group.Name, group.Books, updatedAt)
+				return opdsatom.BuildSeriesFeed(base, group.ID, group.Name, group.Books, page, updatedAt)
 			},
 			opdsatom.MediaType,
 		)
