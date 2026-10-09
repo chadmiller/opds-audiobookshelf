@@ -14,6 +14,8 @@ import (
 	"github.com/chadmiller/opds-audiobookshelf/internal/model"
 )
 
+const RangeGroupThreshold = 60
+
 // FormatTitle returns the book title with series information prepended if
 // available. Series prefix is formatted as "(Series Name #n)" with zero-padded
 // numbers dynamically sized to fit the largest sequence number.

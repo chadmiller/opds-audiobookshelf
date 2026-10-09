@@ -269,7 +269,7 @@ func BuildRootFeed(baseURL, title string, books []model.Book, updatedAt time.Tim
 }
 
 // BuildAuthorNavigationFeed renders a navigation feed of authors (or alphabetical
-// ranges of authors if there are > 100 books). Each author links to their books.
+// ranges of authors if there are more than RangeGroupThreshold items). Each author links to their books.
 // page is 1-indexed.
 func BuildAuthorNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) Feed {
 	groups := bookmeta.GroupByAuthor(books)
@@ -279,7 +279,7 @@ func BuildAuthorNavigationFeed(baseURL, title string, books []model.Book, page i
 		adapters[i] = &bookmeta.AuthorRangeAdapter{Group: &groups[i]}
 	}
 
-	ranges, _ := bookmeta.GroupByAlphaRange(adapters, 100, "authors")
+	ranges, _ := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, "authors")
 
 	var items []bookmeta.AlphaRanged
 	if len(ranges) == 1 && ranges[0].ID == "all" {
@@ -372,7 +372,7 @@ func BuildAuthorRangeFeed(baseURL string, books []model.Book, rangeID string, pa
 		adapters[i] = &bookmeta.AuthorRangeAdapter{Group: &groups[i]}
 	}
 
-	_, grouped := bookmeta.GroupByAlphaRange(adapters, 100, "authors")
+	_, grouped := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, "authors")
 	rangeItems := grouped[rangeID]
 
 	pageItems, _, totalPages := pagination.Paginate(rangeItems, page)
@@ -432,7 +432,7 @@ func BuildAuthorRangeFeed(baseURL string, books []model.Book, rangeID string, pa
 }
 
 // BuildTitleNavigationFeed renders a navigation feed of titles (or alphabetical
-// ranges of titles if there are > 100 books). Each title links to all books with that title.
+// ranges of titles if there are more than RangeGroupThreshold items). Each title links to all books with that title.
 // page is 1-indexed.
 func BuildTitleNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) Feed {
 	groups := bookmeta.GroupByTitle(books)
@@ -442,7 +442,7 @@ func BuildTitleNavigationFeed(baseURL, title string, books []model.Book, page in
 		adapters[i] = &bookmeta.TitleRangeAdapter{Group: &groups[i]}
 	}
 
-	ranges, _ := bookmeta.GroupByAlphaRange(adapters, 100, "titles")
+	ranges, _ := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, "titles")
 
 	var items []bookmeta.AlphaRanged
 	if len(ranges) == 1 && ranges[0].ID == "all" {
@@ -534,7 +534,7 @@ func BuildTitleRangeFeed(baseURL string, books []model.Book, rangeID string, pag
 		adapters[i] = &bookmeta.TitleRangeAdapter{Group: &groups[i]}
 	}
 
-	_, grouped := bookmeta.GroupByAlphaRange(adapters, 100, "titles")
+	_, grouped := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, "titles")
 	rangeItems := grouped[rangeID]
 
 	var booksInRange []model.Book
@@ -651,7 +651,7 @@ func BuildTitleFeed(baseURL, titleName string, books []model.Book, page int, upd
 }
 
 // BuildSeriesNavigationFeed renders a navigation feed of series (or alphabetical
-// ranges if there are > 100 books). Each series links to books in that series.
+// ranges if there are more than RangeGroupThreshold items). Each series links to books in that series.
 // page is 1-indexed.
 func BuildSeriesNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) Feed {
 	groups := bookmeta.GroupBySeries(books)
@@ -661,7 +661,7 @@ func BuildSeriesNavigationFeed(baseURL, title string, books []model.Book, page i
 		adapters[i] = &bookmeta.SeriesRangeAdapter{Group: &groups[i]}
 	}
 
-	ranges, _ := bookmeta.GroupByAlphaRange(adapters, 100, "series")
+	ranges, _ := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, "series")
 
 	var items []bookmeta.AlphaRanged
 	if len(ranges) == 1 && ranges[0].ID == "all" {
@@ -754,7 +754,7 @@ func BuildSeriesRangeFeed(baseURL string, books []model.Book, rangeID string, pa
 		adapters[i] = &bookmeta.SeriesRangeAdapter{Group: &groups[i]}
 	}
 
-	_, grouped := bookmeta.GroupByAlphaRange(adapters, 100, "series")
+	_, grouped := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, "series")
 	rangeItems := grouped[rangeID]
 
 	pageItems, _, totalPages := pagination.Paginate(rangeItems, page)

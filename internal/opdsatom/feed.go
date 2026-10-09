@@ -234,7 +234,7 @@ func BuildAuthorNavigationFeed(baseURL, title string, books []model.Book, page i
 	for i := range groups {
 		adapters[i] = &bookmeta.AuthorRangeAdapter{Group: &groups[i]}
 	}
-	ranges, _ := bookmeta.GroupByAlphaRange(adapters, 100, "authors")
+	ranges, _ := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, "authors")
 
 	var items []bookmeta.AlphaRanged
 	if len(ranges) == 1 && ranges[0].ID == "all" {
@@ -302,7 +302,7 @@ func BuildAuthorRangeFeed(baseURL string, books []model.Book, rangeID string, pa
 	for i := range groups {
 		adapters[i] = &bookmeta.AuthorRangeAdapter{Group: &groups[i]}
 	}
-	_, grouped := bookmeta.GroupByAlphaRange(adapters, 100, "authors")
+	_, grouped := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, "authors")
 	rangeItems := grouped[rangeID]
 
 	pageItems, _, totalPages := pagination.Paginate(rangeItems, page)
@@ -344,7 +344,7 @@ func BuildTitleNavigationFeed(baseURL, title string, books []model.Book, page in
 	for i := range groups {
 		adapters[i] = &bookmeta.TitleRangeAdapter{Group: &groups[i]}
 	}
-	ranges, _ := bookmeta.GroupByAlphaRange(adapters, 100, "titles")
+	ranges, _ := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, "titles")
 
 	var items []bookmeta.AlphaRanged
 	if len(ranges) == 1 && ranges[0].ID == "all" {
@@ -412,7 +412,7 @@ func BuildTitleRangeFeed(baseURL string, books []model.Book, rangeID string, pag
 	for i := range groups {
 		adapters[i] = &bookmeta.TitleRangeAdapter{Group: &groups[i]}
 	}
-	_, grouped := bookmeta.GroupByAlphaRange(adapters, 100, "titles")
+	_, grouped := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, "titles")
 	rangeItems := grouped[rangeID]
 
 	var booksInRange []model.Book
@@ -481,7 +481,7 @@ func BuildSeriesNavigationFeed(baseURL, title string, books []model.Book, page i
 	for i := range groups {
 		adapters[i] = &bookmeta.SeriesRangeAdapter{Group: &groups[i]}
 	}
-	ranges, _ := bookmeta.GroupByAlphaRange(adapters, 100, "series")
+	ranges, _ := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, "series")
 
 	var items []bookmeta.AlphaRanged
 	if len(ranges) == 1 && ranges[0].ID == "all" {
@@ -549,7 +549,7 @@ func BuildSeriesRangeFeed(baseURL string, books []model.Book, rangeID string, pa
 	for i := range groups {
 		adapters[i] = &bookmeta.SeriesRangeAdapter{Group: &groups[i]}
 	}
-	_, grouped := bookmeta.GroupByAlphaRange(adapters, 100, "series")
+	_, grouped := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, "series")
 	rangeItems := grouped[rangeID]
 
 	pageItems, _, totalPages := pagination.Paginate(rangeItems, page)
