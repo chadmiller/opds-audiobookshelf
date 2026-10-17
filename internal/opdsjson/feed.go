@@ -246,17 +246,17 @@ func BuildRootFeed(baseURL, title string, books []model.Book, updatedAt time.Tim
 		},
 		Navigation: []Link{
 			{
-				Href:  baseURL + "/opds/authors",
+				Href:  baseURL + "/opds/authors/",
 				Type:  MediaType,
 				Title: fmt.Sprintf("Find books by author (%d)", len(bookmeta.GroupByAuthor(books))),
 			},
 			{
-				Href:  baseURL + "/opds/titles",
+				Href:  baseURL + "/opds/titles/",
 				Type:  MediaType,
 				Title: fmt.Sprintf("Find books by title (%d)", len(bookmeta.GroupByTitle(books))),
 			},
 			{
-				Href:  baseURL + "/opds/series",
+				Href:  baseURL + "/opds/series/",
 				Type:  MediaType,
 				Title: fmt.Sprintf("Find books by series (%d)", len(bookmeta.GroupBySeries(books))),
 			},
@@ -302,7 +302,7 @@ func BuildAuthorNavigationFeed(baseURL, title string, books []model.Book, page i
 			ItemsPerPage: pagination.PageSize,
 		},
 		Links: []Link{
-			{Rel: "self", Href: baseURL + "/opds/authors" + pageQueryString(page), Type: MediaType},
+			{Rel: "self", Href: baseURL + "/opds/authors/" + pageQueryString(page), Type: MediaType},
 			{Rel: "up", Href: baseURL + "/opds", Type: MediaType},
 		},
 		Navigation: []Link{},
@@ -315,24 +315,24 @@ func BuildAuthorNavigationFeed(baseURL, title string, books []model.Book, page i
 		if page > 1 {
 			feed.Links = append(feed.Links, Link{
 				Rel:  "first",
-				Href: baseURL + "/opds/authors",
+				Href: baseURL + "/opds/authors/",
 				Type: MediaType,
 			})
 			feed.Links = append(feed.Links, Link{
 				Rel:  "previous",
-				Href: baseURL + "/opds/authors" + pageQueryString(page-1),
+				Href: baseURL + "/opds/authors/" + pageQueryString(page-1),
 				Type: MediaType,
 			})
 		}
 		if page < totalPages {
 			feed.Links = append(feed.Links, Link{
 				Rel:  "next",
-				Href: baseURL + "/opds/authors" + pageQueryString(page+1),
+				Href: baseURL + "/opds/authors/" + pageQueryString(page+1),
 				Type: MediaType,
 			})
 			feed.Links = append(feed.Links, Link{
 				Rel:  "last",
-				Href: baseURL + "/opds/authors" + pageQueryString(totalPages),
+				Href: baseURL + "/opds/authors/" + pageQueryString(totalPages),
 				Type: MediaType,
 			})
 		}
@@ -384,7 +384,7 @@ func BuildAuthorRangeFeed(baseURL string, books []model.Book, rangeID string, pa
 		},
 		Links: []Link{
 			{Rel: "self", Href: baseURL + "/opds/authors/" + rangeID + pageQueryString(page), Type: MediaType},
-			{Rel: "up", Href: baseURL + "/opds/authors", Type: MediaType},
+			{Rel: "up", Href: baseURL + "/opds/authors/", Type: MediaType},
 		},
 		Navigation: []Link{},
 	}
@@ -465,7 +465,7 @@ func BuildTitleNavigationFeed(baseURL, title string, books []model.Book, page in
 			ItemsPerPage: pagination.PageSize,
 		},
 		Links: []Link{
-			{Rel: "self", Href: baseURL + "/opds/titles" + pageQueryString(page), Type: MediaType},
+			{Rel: "self", Href: baseURL + "/opds/titles/" + pageQueryString(page), Type: MediaType},
 			{Rel: "up", Href: baseURL + "/opds", Type: MediaType},
 		},
 		Navigation: []Link{},
@@ -478,24 +478,24 @@ func BuildTitleNavigationFeed(baseURL, title string, books []model.Book, page in
 		if page > 1 {
 			feed.Links = append(feed.Links, Link{
 				Rel:  "first",
-				Href: baseURL + "/opds/titles",
+				Href: baseURL + "/opds/titles/",
 				Type: MediaType,
 			})
 			feed.Links = append(feed.Links, Link{
 				Rel:  "previous",
-				Href: baseURL + "/opds/titles" + pageQueryString(page-1),
+				Href: baseURL + "/opds/titles/" + pageQueryString(page-1),
 				Type: MediaType,
 			})
 		}
 		if page < totalPages {
 			feed.Links = append(feed.Links, Link{
 				Rel:  "next",
-				Href: baseURL + "/opds/titles" + pageQueryString(page+1),
+				Href: baseURL + "/opds/titles/" + pageQueryString(page+1),
 				Type: MediaType,
 			})
 			feed.Links = append(feed.Links, Link{
 				Rel:  "last",
-				Href: baseURL + "/opds/titles" + pageQueryString(totalPages),
+				Href: baseURL + "/opds/titles/" + pageQueryString(totalPages),
 				Type: MediaType,
 			})
 		}
@@ -552,7 +552,7 @@ func BuildTitleRangeFeed(baseURL string, books []model.Book, rangeID string, pag
 		},
 		Links: []Link{
 			{Rel: "self", Href: baseURL + "/opds/titles/" + rangeID + pageQueryString(page), Type: MediaType},
-			{Rel: "up", Href: baseURL + "/opds/titles", Type: MediaType},
+			{Rel: "up", Href: baseURL + "/opds/titles/", Type: MediaType},
 		},
 		Publications: make([]Publication, 0, len(pageBooks)),
 	}
@@ -608,7 +608,7 @@ func BuildTitleFeed(baseURL, titleName string, books []model.Book, page int, upd
 		},
 		Links: []Link{
 			{Rel: "self", Href: baseURL + selfPath + pageQueryString(page), Type: MediaType},
-			{Rel: "up", Href: baseURL + "/opds/titles", Type: MediaType},
+			{Rel: "up", Href: baseURL + "/opds/titles/", Type: MediaType},
 		},
 		Publications: make([]Publication, 0, len(pageBooks)),
 	}
@@ -684,7 +684,7 @@ func BuildSeriesNavigationFeed(baseURL, title string, books []model.Book, page i
 			ItemsPerPage: pagination.PageSize,
 		},
 		Links: []Link{
-			{Rel: "self", Href: baseURL + "/opds/series" + pageQueryString(page), Type: MediaType},
+			{Rel: "self", Href: baseURL + "/opds/series/" + pageQueryString(page), Type: MediaType},
 			{Rel: "up", Href: baseURL + "/opds", Type: MediaType},
 		},
 		Navigation: []Link{},
@@ -697,24 +697,24 @@ func BuildSeriesNavigationFeed(baseURL, title string, books []model.Book, page i
 		if page > 1 {
 			feed.Links = append(feed.Links, Link{
 				Rel:  "first",
-				Href: baseURL + "/opds/series",
+				Href: baseURL + "/opds/series/",
 				Type: MediaType,
 			})
 			feed.Links = append(feed.Links, Link{
 				Rel:  "previous",
-				Href: baseURL + "/opds/series" + pageQueryString(page-1),
+				Href: baseURL + "/opds/series/" + pageQueryString(page-1),
 				Type: MediaType,
 			})
 		}
 		if page < totalPages {
 			feed.Links = append(feed.Links, Link{
 				Rel:  "next",
-				Href: baseURL + "/opds/series" + pageQueryString(page+1),
+				Href: baseURL + "/opds/series/" + pageQueryString(page+1),
 				Type: MediaType,
 			})
 			feed.Links = append(feed.Links, Link{
 				Rel:  "last",
-				Href: baseURL + "/opds/series" + pageQueryString(totalPages),
+				Href: baseURL + "/opds/series/" + pageQueryString(totalPages),
 				Type: MediaType,
 			})
 		}
@@ -766,7 +766,7 @@ func BuildSeriesRangeFeed(baseURL string, books []model.Book, rangeID string, pa
 		},
 		Links: []Link{
 			{Rel: "self", Href: baseURL + "/opds/series/" + rangeID + pageQueryString(page), Type: MediaType},
-			{Rel: "up", Href: baseURL + "/opds/series", Type: MediaType},
+			{Rel: "up", Href: baseURL + "/opds/series/", Type: MediaType},
 		},
 		Navigation: []Link{},
 	}
@@ -826,7 +826,7 @@ func BuildSeriesFeed(baseURL, seriesID, seriesName string, books []model.Book, p
 		},
 		Links: []Link{
 			{Rel: "self", Href: baseURL + selfPath + pageQueryString(page), Type: MediaType},
-			{Rel: "up", Href: baseURL + "/opds/series", Type: MediaType},
+			{Rel: "up", Href: baseURL + "/opds/series/", Type: MediaType},
 		},
 		Publications: make([]Publication, 0, len(pageBooks)),
 	}
