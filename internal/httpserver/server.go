@@ -75,7 +75,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	books, updatedAt := s.store.Get()
-	base := baseURL(r)
+	base := ""
 
 	s.writeNegotiatedFeed(w, r,
 		func() opdsjson.Feed { return opdsjson.BuildRootFeed(base, s.title, books, updatedAt) },
@@ -89,7 +89,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAuthorOrRange(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/opds/authors/")
 	books, updatedAt := s.store.Get()
-	base := baseURL(r)
+	base := ""
 	page := getPage(r)
 
 	if id == "" {
@@ -131,7 +131,7 @@ func (s *Server) handleAuthorOrRange(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleTitleOrRange(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/opds/titles/")
 	books, updatedAt := s.store.Get()
-	base := baseURL(r)
+	base := ""
 	page := getPage(r)
 
 	if id == "" {
@@ -177,7 +177,7 @@ func (s *Server) handleTitleOrRange(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSeriesOrRange(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/opds/series/")
 	books, updatedAt := s.store.Get()
-	base := baseURL(r)
+	base := ""
 	page := getPage(r)
 
 	if id == "" {
@@ -328,19 +328,4 @@ func decodeTitle(encoded string) (string, bool) {
 		result = append(result, rune(b[0]))
 	}
 	return string(result), true
-}
-
-func baseURL(r *http.Request) string {
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
-		scheme = proto
-	}
-	host := r.Host
-	if h := r.Header.Get("X-Forwarded-Host"); h != "" {
-		host = h
-	}
-	return scheme + "://" + host
 }
