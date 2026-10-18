@@ -4,6 +4,7 @@
 package catalog
 
 import (
+	"reflect"
 	"sync/atomic"
 	"time"
 
@@ -37,4 +38,10 @@ func (s *Store) Set(books []model.Book, updatedAt time.Time) {
 func (s *Store) Get() ([]model.Book, time.Time) {
 	snap := s.v.Load().(snapshot)
 	return snap.books, snap.updatedAt
+}
+
+// Equal reports whether books is identical to the catalog currently held.
+func (s *Store) Equal(books []model.Book) bool {
+	current, _ := s.Get()
+	return reflect.DeepEqual(current, books)
 }

@@ -76,8 +76,11 @@ func runScan(store *catalog.Store, dbPath, filesRoot string, libraryNames []stri
 		books[i].CoverResolvable = coverExists(filesRoot, books[i])
 	}
 	bookmeta.SortBooks(books)
+	if store.Equal(books) {
+		return
+	}
 	store.Set(books, time.Now())
-	log.Printf("scan complete: %d ebooks", len(books))
+	log.Printf("scan updates catalog to %d ebooks", len(books))
 }
 
 func coverExists(filesRoot string, book model.Book) bool {
