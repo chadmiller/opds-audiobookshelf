@@ -422,14 +422,14 @@ func GroupByAlphaRange(items []AlphaRanged, threshold int, groupName string) (ra
 		idRange string
 		check   func(r rune) bool
 	}{
-		{"range/a-c", "a–c", func(r rune) bool { return r >= 'a' && r <= 'c' }},
-		{"range/d-g", "d–g", func(r rune) bool { return r >= 'd' && r <= 'g' }},
-		{"range/h-k", "h–k", func(r rune) bool { return r >= 'h' && r <= 'k' }},
-		{"range/l-o", "l–o", func(r rune) bool { return r >= 'l' && r <= 'o' }},
-		{"range/p-r", "p–r", func(r rune) bool { return r >= 'p' && r <= 'r' }},
-		{"range/s-t", "s–t", func(r rune) bool { return r >= 's' && r <= 't' }},
-		{"range/u-z", "u–z", func(r rune) bool { return r >= 't' && r <= 'z' }},
-		{"range/0-9", "0–9", func(r rune) bool { return r >= '0' && r <= '9' }},
+		{"range/a-c", "a-c", func(r rune) bool { return r >= 'a' && r <= 'c' }},
+		{"range/d-g", "d-g", func(r rune) bool { return r >= 'd' && r <= 'g' }},
+		{"range/h-k", "h-k", func(r rune) bool { return r >= 'h' && r <= 'k' }},
+		{"range/l-o", "l-o", func(r rune) bool { return r >= 'l' && r <= 'o' }},
+		{"range/p-r", "p-r", func(r rune) bool { return r >= 'p' && r <= 'r' }},
+		{"range/s-t", "s-t", func(r rune) bool { return r >= 's' && r <= 't' }},
+		{"range/u-z", "u-z", func(r rune) bool { return r >= 't' && r <= 'z' }},
+		{"range/0-9", "0-9", func(r rune) bool { return r >= '0' && r <= '9' }},
 		{"range/other", "other", func(r rune) bool { return !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')) }},
 	}
 
