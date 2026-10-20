@@ -6,13 +6,20 @@ package opdsatom
 import (
 	"encoding/xml"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/chadmiller/opds-audiobookshelf/internal/bookmeta"
 	"github.com/chadmiller/opds-audiobookshelf/internal/model"
+	"github.com/chadmiller/opds-audiobookshelf/internal/feeds"
 	"github.com/chadmiller/opds-audiobookshelf/internal/pagination"
 	"github.com/chadmiller/opds-audiobookshelf/internal/placeholder"
 )
+
+// AtomFeed builds OPDS 1.x Atom/XML feeds. It is stateless; negotiation
+// hands back an AtomFeed value once per request, and callers call its
+// methods directly without needing to know they're talking to this package.
+type AtomFeed struct{}
 
 // MediaType is the media type of an OPDS 1.x acquisition feed.
 const MediaType = "application/atom+xml;profile=opds-catalog;kind=acquisition"
@@ -78,6 +85,28 @@ type Entry struct {
 	Links   []Link   `xml:"link"`
 }
 
+// ContentType reports this feed's own media type, taken from its self link
+// (set by newFeed), satisfying feeds.Feed.
+func (f Feed) ContentType() string {
+	for _, l := range f.Links {
+		if l.Rel == "self" {
+			return l.Type
+		}
+	}
+	return MediaType
+}
+
+// Encode writes f to w as indented XML with a standard XML header,
+// satisfying feeds.Feed.
+func (f Feed) Encode(w io.Writer) error {
+	if _, err := w.Write([]byte(xml.Header)); err != nil {
+		return err
+	}
+	enc := xml.NewEncoder(w)
+	enc.Indent("", "  ")
+	return enc.Encode(f)
+}
+
 // formatUpdated renders updatedAt as the RFC 3339 timestamp Atom's
 // <updated> element requires, falling back to the Unix epoch if the
 // catalog hasn't completed a scan yet.
@@ -110,7 +139,7 @@ func newFeed(baseURL, selfPath, selfType, title string, updatedAt time.Time) Fee
 // feed: one entry per author, each linking to the acquisition feed built by
 // BuildFeed for that author's books. baseURL must not have a trailing
 // slash, e.g. "https://example.com".
-func BuildNavigationFeed(baseURL, title string, groups []bookmeta.AuthorGroup, updatedAt time.Time) Feed {
+func (AtomFeed) BuildNavigationFeed(baseURL, title string, groups []bookmeta.AuthorGroup, updatedAt time.Time) feeds.Feed {
 	feed := newFeed(baseURL, "/opds", NavigationMediaType, title, updatedAt)
 	feed.Entries = make([]Entry, 0, len(groups))
 	for _, g := range groups {
@@ -130,7 +159,7 @@ func BuildNavigationFeed(baseURL, title string, groups []bookmeta.AuthorGroup, u
 // acquisition catalog. baseURL must not have a trailing slash, e.g.
 // "https://example.com". selfPath is this feed's own path, e.g.
 // "/opds/authors/weir-andy". page is 1-indexed.
-func BuildFeed(baseURL, selfPath, title string, books []model.Book, page int, updatedAt time.Time) Feed {
+func (AtomFeed) BuildFeed(baseURL, selfPath, title string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
 	pageBooks, _, totalPages := pagination.Paginate(books, page)
 	feed := newFeed(baseURL, selfPath+pageQueryString(page), MediaType, title, updatedAt)
 
@@ -196,7 +225,7 @@ func buildEntryWithSeriesPrefix(baseURL string, b model.Book, updatedStr string,
 }
 
 // BuildRootFeed renders the root catalog as a selection menu with three browse options.
-func BuildRootFeed(baseURL, title string, books []model.Book, updatedAt time.Time) Feed {
+func (AtomFeed) BuildRootFeed(baseURL, title string, books []model.Book, updatedAt time.Time) feeds.Feed {
 	feed := newFeed(baseURL, "/opds", NavigationMediaType, title, updatedAt)
 	feed.Entries = make([]Entry, 3)
 	feed.Entries[0] = Entry{
@@ -228,7 +257,7 @@ func BuildRootFeed(baseURL, title string, books []model.Book, updatedAt time.Tim
 
 // BuildAuthorNavigationFeed renders a navigation feed of authors (or ranges).
 // page is 1-indexed.
-func BuildAuthorNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) Feed {
+func (AtomFeed) BuildAuthorNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
 	groups := bookmeta.GroupByAuthor(books)
 	adapters := make([]bookmeta.AlphaRanged, len(groups))
 	for i := range groups {
@@ -296,7 +325,7 @@ func BuildAuthorNavigationFeed(baseURL, title string, books []model.Book, page i
 
 // BuildAuthorRangeFeed renders authors in a specific alphabetical range.
 // page is 1-indexed.
-func BuildAuthorRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) Feed {
+func (AtomFeed) BuildAuthorRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) feeds.Feed {
 	groups := bookmeta.GroupByAuthor(books)
 	adapters := make([]bookmeta.AlphaRanged, len(groups))
 	for i := range groups {
@@ -338,7 +367,7 @@ func BuildAuthorRangeFeed(baseURL string, books []model.Book, rangeID string, pa
 
 // BuildTitleNavigationFeed renders a navigation feed of titles (or ranges).
 // page is 1-indexed.
-func BuildTitleNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) Feed {
+func (AtomFeed) BuildTitleNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
 	groups := bookmeta.GroupByTitle(books)
 	adapters := make([]bookmeta.AlphaRanged, len(groups))
 	for i := range groups {
@@ -406,7 +435,7 @@ func BuildTitleNavigationFeed(baseURL, title string, books []model.Book, page in
 
 // BuildTitleRangeFeed renders all books in a specific alphabetical range as an acquisition feed.
 // page is 1-indexed.
-func BuildTitleRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) Feed {
+func (AtomFeed) BuildTitleRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) feeds.Feed {
 	groups := bookmeta.GroupByTitle(books)
 	adapters := make([]bookmeta.AlphaRanged, len(groups))
 	for i := range groups {
@@ -447,7 +476,7 @@ func BuildTitleRangeFeed(baseURL string, books []model.Book, rangeID string, pag
 
 // BuildTitleFeed renders all books with a specific title as an acquisition feed.
 // page is 1-indexed.
-func BuildTitleFeed(baseURL, titleName string, books []model.Book, page int, updatedAt time.Time) Feed {
+func (AtomFeed) BuildTitleFeed(baseURL, titleName string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
 	pageBooks, _, totalPages := pagination.Paginate(books, page)
 	selfPath := "/opds/titles/" + fmt.Sprintf("%x", titleName)
 
@@ -475,7 +504,7 @@ func BuildTitleFeed(baseURL, titleName string, books []model.Book, page int, upd
 
 // BuildSeriesNavigationFeed renders a navigation feed of series (or ranges).
 // page is 1-indexed.
-func BuildSeriesNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) Feed {
+func (AtomFeed) BuildSeriesNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
 	groups := bookmeta.GroupBySeries(books)
 	adapters := make([]bookmeta.AlphaRanged, len(groups))
 	for i := range groups {
@@ -543,7 +572,7 @@ func BuildSeriesNavigationFeed(baseURL, title string, books []model.Book, page i
 
 // BuildSeriesRangeFeed renders series in a specific alphabetical range.
 // page is 1-indexed.
-func BuildSeriesRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) Feed {
+func (AtomFeed) BuildSeriesRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) feeds.Feed {
 	groups := bookmeta.GroupBySeries(books)
 	adapters := make([]bookmeta.AlphaRanged, len(groups))
 	for i := range groups {
@@ -585,7 +614,7 @@ func BuildSeriesRangeFeed(baseURL string, books []model.Book, rangeID string, pa
 
 // BuildSeriesFeed renders all books in a specific series as an acquisition feed.
 // page is 1-indexed.
-func BuildSeriesFeed(baseURL, seriesID, seriesName string, books []model.Book, page int, updatedAt time.Time) Feed {
+func (AtomFeed) BuildSeriesFeed(baseURL, seriesID, seriesName string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
 	pageBooks, _, totalPages := pagination.Paginate(books, page)
 	selfPath := "/opds/series/" + seriesID
 

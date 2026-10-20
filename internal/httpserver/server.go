@@ -4,8 +4,6 @@ package httpserver
 
 import (
 	"bytes"
-	"encoding/json"
-	"encoding/xml"
 	"fmt"
 	"log"
 	"mime"
@@ -17,12 +15,20 @@ import (
 
 	"github.com/chadmiller/opds-audiobookshelf/internal/bookmeta"
 	"github.com/chadmiller/opds-audiobookshelf/internal/catalog"
+	"github.com/chadmiller/opds-audiobookshelf/internal/feeds"
+	"github.com/chadmiller/opds-audiobookshelf/internal/feeds/atom"
+	"github.com/chadmiller/opds-audiobookshelf/internal/feeds/json"
 	"github.com/chadmiller/opds-audiobookshelf/internal/model"
-	"github.com/chadmiller/opds-audiobookshelf/internal/opdsatom"
-	"github.com/chadmiller/opds-audiobookshelf/internal/opdsjson"
 	"github.com/chadmiller/opds-audiobookshelf/internal/pathmap"
 	"github.com/chadmiller/opds-audiobookshelf/internal/placeholder"
 )
+
+// negotiateBuilder is the one place in this package that knows the feed
+// dialects exist: it wires feeds.Negotiate up to the two concrete Builders,
+// so every handler below can just ask for "the" builder for this request.
+func negotiateBuilder(r *http.Request) feeds.Builder {
+	return feeds.Negotiate(r.Header.Get("Accept"), opdsjson.JSONFeed{}, opdsatom.AtomFeed{})
+}
 
 // Server serves the OPDS catalog and the files it references.
 type Server struct {
@@ -76,12 +82,9 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	}
 	books, updatedAt := s.store.Get()
 	base := ""
+	builder := negotiateBuilder(r)
 
-	s.writeNegotiatedFeed(w, r,
-		func() opdsjson.Feed { return opdsjson.BuildRootFeed(base, s.title, books, updatedAt) },
-		func() opdsatom.Feed { return opdsatom.BuildRootFeed(base, s.title, books, updatedAt) },
-		opdsatom.NavigationMediaType,
-	)
+	writeFeed(w, r, builder.BuildRootFeed(base, s.title, books, updatedAt))
 }
 
 // handleAuthorOrRange serves either a navigation feed of authors/ranges (if no ID or
@@ -91,20 +94,13 @@ func (s *Server) handleAuthorOrRange(w http.ResponseWriter, r *http.Request) {
 	books, updatedAt := s.store.Get()
 	base := ""
 	page := getPage(r)
+	builder := negotiateBuilder(r)
 
 	if id == "" {
-		s.writeNegotiatedFeed(w, r,
-			func() opdsjson.Feed { return opdsjson.BuildAuthorNavigationFeed(base, s.title, books, page, updatedAt) },
-			func() opdsatom.Feed { return opdsatom.BuildAuthorNavigationFeed(base, s.title, books, page, updatedAt) },
-			opdsatom.NavigationMediaType,
-		)
+		writeFeed(w, r, builder.BuildAuthorNavigationFeed(base, s.title, books, page, updatedAt))
 		return
 	} else if isRange := isAlphaRange(id); isRange {
-		s.writeNegotiatedFeed(w, r,
-			func() opdsjson.Feed { return opdsjson.BuildAuthorRangeFeed(base, books, id, page, updatedAt) },
-			func() opdsatom.Feed { return opdsatom.BuildAuthorRangeFeed(base, books, id, page, updatedAt) },
-			opdsatom.NavigationMediaType,
-		)
+		writeFeed(w, r, builder.BuildAuthorRangeFeed(base, books, id, page, updatedAt))
 		return
 	}
 
@@ -116,15 +112,7 @@ func (s *Server) handleAuthorOrRange(w http.ResponseWriter, r *http.Request) {
 	}
 	selfPath := "/opds/authors/" + group.ID
 
-	s.writeNegotiatedFeed(w, r,
-		func() opdsjson.Feed {
-			return opdsjson.BuildFeed(base, selfPath, group.DisplayName, group.Books, page, updatedAt)
-		},
-		func() opdsatom.Feed {
-			return opdsatom.BuildFeed(base, selfPath, group.DisplayName, group.Books, page, updatedAt)
-		},
-		opdsatom.MediaType,
-	)
+	writeFeed(w, r, builder.BuildFeed(base, selfPath, group.DisplayName, group.Books, page, updatedAt))
 }
 
 // handleTitleOrRange serves either a navigation feed of titles/ranges or all books with a specific title.
@@ -133,20 +121,13 @@ func (s *Server) handleTitleOrRange(w http.ResponseWriter, r *http.Request) {
 	books, updatedAt := s.store.Get()
 	base := ""
 	page := getPage(r)
+	builder := negotiateBuilder(r)
 
 	if id == "" {
-		s.writeNegotiatedFeed(w, r,
-			func() opdsjson.Feed { return opdsjson.BuildTitleNavigationFeed(base, s.title, books, page, updatedAt) },
-			func() opdsatom.Feed { return opdsatom.BuildTitleNavigationFeed(base, s.title, books, page, updatedAt) },
-			opdsatom.NavigationMediaType,
-		)
+		writeFeed(w, r, builder.BuildTitleNavigationFeed(base, s.title, books, page, updatedAt))
 		return
 	} else if isRange := isAlphaRange(id); isRange {
-		s.writeNegotiatedFeed(w, r,
-			func() opdsjson.Feed { return opdsjson.BuildTitleRangeFeed(base, books, id, page, updatedAt) },
-			func() opdsatom.Feed { return opdsatom.BuildTitleRangeFeed(base, books, id, page, updatedAt) },
-			opdsatom.MediaType,
-		)
+		writeFeed(w, r, builder.BuildTitleRangeFeed(base, books, id, page, updatedAt))
 		return
 	} else if titleName, ok := decodeTitle(id); !ok {
 		http.NotFound(w, r)
@@ -165,11 +146,7 @@ func (s *Server) handleTitleOrRange(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s.writeNegotiatedFeed(w, r,
-			func() opdsjson.Feed { return opdsjson.BuildTitleFeed(base, titleName, titleBooks, page, updatedAt) },
-			func() opdsatom.Feed { return opdsatom.BuildTitleFeed(base, titleName, titleBooks, page, updatedAt) },
-			opdsatom.MediaType,
-		)
+		writeFeed(w, r, builder.BuildTitleFeed(base, titleName, titleBooks, page, updatedAt))
 	}
 }
 
@@ -179,67 +156,35 @@ func (s *Server) handleSeriesOrRange(w http.ResponseWriter, r *http.Request) {
 	books, updatedAt := s.store.Get()
 	base := ""
 	page := getPage(r)
+	builder := negotiateBuilder(r)
 
 	if id == "" {
-		s.writeNegotiatedFeed(w, r,
-			func() opdsjson.Feed { return opdsjson.BuildSeriesNavigationFeed(base, s.title, books, page, updatedAt) },
-			func() opdsatom.Feed { return opdsatom.BuildSeriesNavigationFeed(base, s.title, books, page, updatedAt) },
-			opdsatom.NavigationMediaType,
-		)
+		writeFeed(w, r, builder.BuildSeriesNavigationFeed(base, s.title, books, page, updatedAt))
 		return
 	} else if isRange := isAlphaRange(id); isRange {
-		s.writeNegotiatedFeed(w, r,
-			func() opdsjson.Feed { return opdsjson.BuildSeriesRangeFeed(base, books, id, page, updatedAt) },
-			func() opdsatom.Feed { return opdsatom.BuildSeriesRangeFeed(base, books, id, page, updatedAt) },
-			opdsatom.NavigationMediaType,
-		)
+		writeFeed(w, r, builder.BuildSeriesRangeFeed(base, books, id, page, updatedAt))
 		return
 	} else if group, ok := findSeriesGroup(bookmeta.GroupBySeries(books), id); !ok {
 		http.NotFound(w, r)
 		fmt.Println("Failed to find series group", id)
 		return
 	} else {
-		s.writeNegotiatedFeed(w, r,
-			func() opdsjson.Feed {
-				return opdsjson.BuildSeriesFeed(base, group.ID, group.Name, group.Books, page, updatedAt)
-			},
-			func() opdsatom.Feed {
-				return opdsatom.BuildSeriesFeed(base, group.ID, group.Name, group.Books, page, updatedAt)
-			},
-			opdsatom.MediaType,
-		)
+		writeFeed(w, r, builder.BuildSeriesFeed(base, group.ID, group.Name, group.Books, page, updatedAt))
 	}
 }
 
-// writeNegotiatedFeed renders buildJSON or buildAtom (whichever the
-// request's Accept header selects) and writes it with an explicit
-// Content-Length rather than letting net/http fall back to chunked
-// transfer-encoding, which some minimal OPDS client HTTP stacks don't
-// decode correctly.
-func (s *Server) writeNegotiatedFeed(w http.ResponseWriter, r *http.Request, buildJSON func() opdsjson.Feed, buildAtom func() opdsatom.Feed, atomContentType string) {
+// writeFeed encodes feed and writes it with an explicit Content-Length
+// rather than letting net/http fall back to chunked transfer-encoding,
+// which some minimal OPDS client HTTP stacks don't decode correctly.
+func writeFeed(w http.ResponseWriter, r *http.Request, feed feeds.Feed) {
 	var buf bytes.Buffer
-	var contentType string
-	if negotiateFeedFormat(r.Header.Get("Accept")) {
-		contentType = opdsjson.MediaType
-		enc := json.NewEncoder(&buf)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(buildJSON()); err != nil {
-			log.Printf("encode feed: %v", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
-			return
-		}
-	} else {
-		contentType = atomContentType
-		buf.WriteString(xml.Header)
-		enc := xml.NewEncoder(&buf)
-		enc.Indent("", "  ")
-		if err := enc.Encode(buildAtom()); err != nil {
-			log.Printf("encode feed: %v", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
-			return
-		}
+	if err := feed.Encode(&buf); err != nil {
+		log.Printf("encode feed: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
 	}
 
+	contentType := feed.ContentType()
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", buf.Len()))
 	w.Write(buf.Bytes())

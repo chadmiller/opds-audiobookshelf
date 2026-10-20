@@ -1,17 +1,24 @@
-package httpserver
+package feeds
 
 import (
 	"strconv"
 	"strings"
 )
 
-// negotiateFeedFormat picks between the OPDS 2.0 JSON feed and the OPDS 1.x
-// Atom/XML feed based on the request's Accept header. Clients that don't
-// send a meaningful Accept header (many minimal/embedded OPDS clients send
-// none, or "*/*") get Atom/XML, since that's the older, more broadly
-// supported format; JSON is only served when a client explicitly asks for
-// it with a higher or equal preference.
-func negotiateFeedFormat(acceptHeader string) (wantsJSON bool) {
+// Negotiate picks between jsonBuilder and atomBuilder (whichever the
+// request's Accept header selects) and returns the winner. Clients that
+// don't send a meaningful Accept header (many minimal/embedded OPDS clients
+// send none, or "*/*") get atomBuilder, since Atom/XML is the older, more
+// broadly supported format; jsonBuilder is only returned when a client
+// explicitly asks for JSON with a higher or equal preference.
+func Negotiate(acceptHeader string, jsonBuilder, atomBuilder Builder) Builder {
+	if wantsJSON(acceptHeader) {
+		return jsonBuilder
+	}
+	return atomBuilder
+}
+
+func wantsJSON(acceptHeader string) bool {
 	if strings.TrimSpace(acceptHeader) == "" {
 		return false
 	}

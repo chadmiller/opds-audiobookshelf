@@ -3,16 +3,34 @@
 package opdsjson
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/chadmiller/opds-audiobookshelf/internal/bookmeta"
 	"github.com/chadmiller/opds-audiobookshelf/internal/model"
+	"github.com/chadmiller/opds-audiobookshelf/internal/feeds"
 	"github.com/chadmiller/opds-audiobookshelf/internal/pagination"
 	"github.com/chadmiller/opds-audiobookshelf/internal/placeholder"
 )
 
 const MediaType = "application/opds+json"
+
+// JSONFeed builds OPDS 2.0 JSON feeds. It is stateless; negotiation hands
+// back a JSONFeed value once per request, and callers call its methods
+// directly without needing to know they're talking to this package.
+type JSONFeed struct{}
+
+// ContentType satisfies feeds.Feed.
+func (f Feed) ContentType() string { return MediaType }
+
+// Encode writes f to w as indented JSON, satisfying feeds.Feed.
+func (f Feed) Encode(w io.Writer) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(f)
+}
 
 func pageQueryString(page int) string {
 	if page <= 1 {
@@ -82,7 +100,7 @@ type Publication struct {
 // feed: one navigation entry per author, each pointing at the acquisition
 // feed built by BuildFeed for that author's books. baseURL must not have a
 // trailing slash, e.g. "https://example.com".
-func BuildNavigationFeed(baseURL, title string, groups []bookmeta.AuthorGroup, updatedAt time.Time) Feed {
+func (JSONFeed) BuildNavigationFeed(baseURL, title string, groups []bookmeta.AuthorGroup, updatedAt time.Time) feeds.Feed {
 	feed := Feed{
 		Metadata: FeedMetadata{
 			Title:        title,
@@ -111,7 +129,7 @@ func BuildNavigationFeed(baseURL, title string, groups []bookmeta.AuthorGroup, u
 // catalog. baseURL must not have a trailing slash, e.g. "https://example.com".
 // selfPath is this feed's own path, e.g. "/opds/authors/weir-andy".
 // page is 1-indexed.
-func BuildFeed(baseURL, selfPath, title string, books []model.Book, page int, updatedAt time.Time) Feed {
+func (JSONFeed) BuildFeed(baseURL, selfPath, title string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
 	pageBooks, _, totalPages := pagination.Paginate(books, page)
 
 	feed := Feed{
@@ -234,7 +252,7 @@ type BrowseOption struct {
 // BuildRootFeed renders the root catalog as a selection menu with three browse
 // options: by author, by title, by series. Each option shows the count of groups
 // (distinct authors, titles, or series).
-func BuildRootFeed(baseURL, title string, books []model.Book, updatedAt time.Time) Feed {
+func (JSONFeed) BuildRootFeed(baseURL, title string, books []model.Book, updatedAt time.Time) feeds.Feed {
 
 	feed := Feed{
 		Metadata: FeedMetadata{
@@ -271,7 +289,7 @@ func BuildRootFeed(baseURL, title string, books []model.Book, updatedAt time.Tim
 // BuildAuthorNavigationFeed renders a navigation feed of authors (or alphabetical
 // ranges of authors if there are more than RangeGroupThreshold items). Each author links to their books.
 // page is 1-indexed.
-func BuildAuthorNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) Feed {
+func (JSONFeed) BuildAuthorNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
 	groups := bookmeta.GroupByAuthor(books)
 
 	adapters := make([]bookmeta.AlphaRanged, len(groups))
@@ -364,7 +382,7 @@ func BuildAuthorNavigationFeed(baseURL, title string, books []model.Book, page i
 // BuildAuthorRangeFeed renders a navigation feed of authors in a specific
 // alphabetical range (e.g., a-c). Each author links to their books.
 // page is 1-indexed.
-func BuildAuthorRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) Feed {
+func (JSONFeed) BuildAuthorRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) feeds.Feed {
 	groups := bookmeta.GroupByAuthor(books)
 
 	adapters := make([]bookmeta.AlphaRanged, len(groups))
@@ -434,7 +452,7 @@ func BuildAuthorRangeFeed(baseURL string, books []model.Book, rangeID string, pa
 // BuildTitleNavigationFeed renders a navigation feed of titles (or alphabetical
 // ranges of titles if there are more than RangeGroupThreshold items). Each title links to all books with that title.
 // page is 1-indexed.
-func BuildTitleNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) Feed {
+func (JSONFeed) BuildTitleNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
 	groups := bookmeta.GroupByTitle(books)
 
 	adapters := make([]bookmeta.AlphaRanged, len(groups))
@@ -526,7 +544,7 @@ func BuildTitleNavigationFeed(baseURL, title string, books []model.Book, page in
 
 // BuildTitleRangeFeed renders all books in a specific alphabetical range as an acquisition feed.
 // page is 1-indexed.
-func BuildTitleRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) Feed {
+func (JSONFeed) BuildTitleRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) feeds.Feed {
 	groups := bookmeta.GroupByTitle(books)
 
 	adapters := make([]bookmeta.AlphaRanged, len(groups))
@@ -597,7 +615,7 @@ func BuildTitleRangeFeed(baseURL string, books []model.Book, rangeID string, pag
 
 // BuildTitleFeed renders all books with a specific title as an acquisition feed.
 // page is 1-indexed.
-func BuildTitleFeed(baseURL, titleName string, books []model.Book, page int, updatedAt time.Time) Feed {
+func (JSONFeed) BuildTitleFeed(baseURL, titleName string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
 	pageBooks, _, totalPages := pagination.Paginate(books, page)
 	selfPath := "/opds/titles/" + fmt.Sprintf("%x", titleName)
 
@@ -653,7 +671,7 @@ func BuildTitleFeed(baseURL, titleName string, books []model.Book, page int, upd
 // BuildSeriesNavigationFeed renders a navigation feed of series (or alphabetical
 // ranges if there are more than RangeGroupThreshold items). Each series links to books in that series.
 // page is 1-indexed.
-func BuildSeriesNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) Feed {
+func (JSONFeed) BuildSeriesNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
 	groups := bookmeta.GroupBySeries(books)
 
 	adapters := make([]bookmeta.AlphaRanged, len(groups))
@@ -746,7 +764,7 @@ func BuildSeriesNavigationFeed(baseURL, title string, books []model.Book, page i
 // BuildSeriesRangeFeed renders a navigation feed of series in a specific
 // alphabetical range. Each series links to books in that series.
 // page is 1-indexed.
-func BuildSeriesRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) Feed {
+func (JSONFeed) BuildSeriesRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) feeds.Feed {
 	groups := bookmeta.GroupBySeries(books)
 
 	adapters := make([]bookmeta.AlphaRanged, len(groups))
@@ -815,7 +833,7 @@ func BuildSeriesRangeFeed(baseURL string, books []model.Book, rangeID string, pa
 
 // BuildSeriesFeed renders all books in a specific series as an acquisition feed.
 // page is 1-indexed.
-func BuildSeriesFeed(baseURL, seriesID, seriesName string, books []model.Book, page int, updatedAt time.Time) Feed {
+func (JSONFeed) BuildSeriesFeed(baseURL, seriesID, seriesName string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
 	pageBooks, _, totalPages := pagination.Paginate(books, page)
 	selfPath := "/opds/series/" + seriesID
 
