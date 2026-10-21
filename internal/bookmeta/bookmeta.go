@@ -376,6 +376,44 @@ type AlphaRanged interface {
 	GetLeafCount() int
 }
 
+// CategoryItem is one browsable group within a Category — one author, one
+// exact title, or one series. It extends AlphaRanged (so a slice of these
+// can be fed straight into GroupByAlphaRange) with what's needed to render
+// the group's own listing entry: a URL/URN path segment and a display
+// label. Feed builders use this single interface to render author, title,
+// and series group entries identically instead of three near-duplicate
+// implementations.
+type CategoryItem interface {
+	AlphaRanged
+	// ItemID is this group's URL path segment (appended to a Category's
+	// PathSegment) and URN suffix (appended to its URNPrefix).
+	ItemID() string
+	// ItemLabel is the human-readable name shown in listing entries, e.g.
+	// "Weir, Andy", "The Martian", or "The Expanse".
+	ItemLabel() string
+}
+
+// Category bundles the string fragments that distinguish the three
+// top-level browse groupings (author, title, series) so feed builders can
+// share one implementation parameterized by Category instead of three
+// near-identical copies.
+type Category struct {
+	// PathSegment is this category's URL path segment, e.g. "authors",
+	// used to build "/opds/<PathSegment>/...".
+	PathSegment string
+	// URNPrefix is the URN namespace used for group and range entry IDs,
+	// e.g. "urn:opds:authors:".
+	URNPrefix string
+	// Title is this category's browse-feed title, e.g. "Authors".
+	Title string
+}
+
+var (
+	AuthorCategory = Category{PathSegment: "authors", URNPrefix: "urn:opds:authors:", Title: "Authors"}
+	TitleCategory  = Category{PathSegment: "titles", URNPrefix: "urn:opds:titles:", Title: "Titles"}
+	SeriesCategory = Category{PathSegment: "series", URNPrefix: "urn:opds:series:", Title: "Series"}
+)
+
 // AuthorRangeAdapter makes AuthorGroup compatible with alphabetical grouping
 type AuthorRangeAdapter struct {
 	Group *AuthorGroup
@@ -383,6 +421,8 @@ type AuthorRangeAdapter struct {
 
 func (a *AuthorRangeAdapter) GetSortKey() string { return a.Group.DisplayName }
 func (a *AuthorRangeAdapter) GetLeafCount() int  { return len(a.Group.Books) }
+func (a *AuthorRangeAdapter) ItemID() string     { return a.Group.ID }
+func (a *AuthorRangeAdapter) ItemLabel() string  { return a.Group.DisplayName }
 
 // TitleRangeAdapter makes TitleGroup compatible with alphabetical grouping
 type TitleRangeAdapter struct {
@@ -391,6 +431,8 @@ type TitleRangeAdapter struct {
 
 func (t *TitleRangeAdapter) GetSortKey() string { return t.Group.SortKey }
 func (t *TitleRangeAdapter) GetLeafCount() int  { return len(t.Group.Books) }
+func (t *TitleRangeAdapter) ItemID() string     { return fmt.Sprintf("%x", t.Group.Title) }
+func (t *TitleRangeAdapter) ItemLabel() string  { return t.Group.Title }
 
 // SeriesRangeAdapter makes SeriesGroup compatible with alphabetical grouping
 type SeriesRangeAdapter struct {
@@ -399,6 +441,38 @@ type SeriesRangeAdapter struct {
 
 func (s *SeriesRangeAdapter) GetSortKey() string { return s.Group.SortKey }
 func (s *SeriesRangeAdapter) GetLeafCount() int  { return len(s.Group.Books) }
+func (s *SeriesRangeAdapter) ItemID() string     { return s.Group.ID }
+func (s *SeriesRangeAdapter) ItemLabel() string  { return s.Group.Name }
+
+// AuthorCategoryItems, TitleCategoryItems, and SeriesCategoryItems group
+// books and wrap the resulting groups as CategoryItem, for feed builders
+// that render one listing entry per author/title/series.
+func AuthorCategoryItems(books []model.Book) []CategoryItem {
+	groups := GroupByAuthor(books)
+	items := make([]CategoryItem, len(groups))
+	for i := range groups {
+		items[i] = &AuthorRangeAdapter{Group: &groups[i]}
+	}
+	return items
+}
+
+func TitleCategoryItems(books []model.Book) []CategoryItem {
+	groups := GroupByTitle(books)
+	items := make([]CategoryItem, len(groups))
+	for i := range groups {
+		items[i] = &TitleRangeAdapter{Group: &groups[i]}
+	}
+	return items
+}
+
+func SeriesCategoryItems(books []model.Book) []CategoryItem {
+	groups := GroupBySeries(books)
+	items := make([]CategoryItem, len(groups))
+	for i := range groups {
+		items[i] = &SeriesRangeAdapter{Group: &groups[i]}
+	}
+	return items
+}
 
 // GroupByAlphaRange splits items into alphabetical ranges (a–c, d–g, etc.)
 // if itemCount > threshold. Otherwise returns a single "all" range.

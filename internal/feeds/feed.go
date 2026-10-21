@@ -31,13 +31,16 @@ type Feed interface {
 // dialect.
 type Builder interface {
 	BuildRootFeed(baseURL, title string, books []model.Book, updatedAt time.Time) Feed
-	BuildAuthorNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) Feed
+
+	BuildAuthorFeed(baseURL, selfPath, title string, books []model.Book, page int, updatedAt time.Time) Feed
+	BuildAuthorNavigationFeed(baseURL string, books []model.Book, page int, updatedAt time.Time) Feed
 	BuildAuthorRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) Feed
-	BuildFeed(baseURL, selfPath, title string, books []model.Book, page int, updatedAt time.Time) Feed
-	BuildTitleNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) Feed
+
 	BuildTitleRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) Feed
 	BuildTitleFeed(baseURL, titleName string, books []model.Book, page int, updatedAt time.Time) Feed
-	BuildSeriesNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) Feed
-	BuildSeriesRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) Feed
+	BuildTitleNavigationFeed(baseURL string, books []model.Book, page int, updatedAt time.Time) Feed
+
 	BuildSeriesFeed(baseURL, seriesID, seriesName string, books []model.Book, page int, updatedAt time.Time) Feed
+	BuildSeriesNavigationFeed(baseURL string, books []model.Book, page int, updatedAt time.Time) Feed
+	BuildSeriesRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) Feed
 }

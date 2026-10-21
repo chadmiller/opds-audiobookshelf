@@ -39,18 +39,6 @@ func pageQueryString(page int) string {
 	return fmt.Sprintf("?page=%d", page)
 }
 
-type AlphaRangeWrapper struct {
-	Range *bookmeta.AlphaRange
-}
-
-func (w *AlphaRangeWrapper) GetSortKey() string {
-	return w.Range.ID
-}
-
-func (w *AlphaRangeWrapper) GetLeafCount() int {
-	return w.Range.LeafCount
-}
-
 type Feed struct {
 	Metadata     FeedMetadata  `json:"metadata"`
 	Links        []Link        `json:"links"`
@@ -96,9 +84,138 @@ type Publication struct {
 	Images   []Link              `json:"images,omitempty"`
 }
 
+// paginationLinks returns the first/previous/next/last links for a feed with
+// totalPages pages, currently showing page (1-indexed) at selfPath. Returns
+// nil if there's only one page.
+func paginationLinks(baseURL, selfPath string, page, totalPages int, mediaType string) []Link {
+	var links []Link
+	if totalPages <= 1 {
+		return links
+	}
+	if page > 1 {
+		links = append(links, Link{Rel: "first", Href: baseURL + selfPath, Type: mediaType})
+		links = append(links, Link{Rel: "previous", Href: baseURL + selfPath + pageQueryString(page-1), Type: mediaType})
+	}
+	if page < totalPages {
+		links = append(links, Link{Rel: "next", Href: baseURL + selfPath + pageQueryString(page+1), Type: mediaType})
+		links = append(links, Link{Rel: "last", Href: baseURL + selfPath + pageQueryString(totalPages), Type: mediaType})
+	}
+	return links
+}
+
+// buildCategoryItemLink renders the listing navigation link for one author/
+// title/series group, pointing at that group's own acquisition feed. Shared
+// by buildCategoryNavigationFeed's "all" case and buildCategoryRangeFeed.
+func buildCategoryItemLink(baseURL string, cat bookmeta.Category, item bookmeta.CategoryItem) Link {
+	return Link{
+		Href:  baseURL + "/opds/" + cat.PathSegment + "/" + item.ItemID(),
+		Type:  MediaType,
+		Title: fmt.Sprintf("%s (%d)", item.ItemLabel(), item.GetLeafCount()),
+	}
+}
+
+// buildRangeLink renders the listing navigation link for one alphabetical
+// range bucket of a category's groups (e.g. "authors starting a-c"). Shared
+// by buildCategoryNavigationFeed.
+func buildRangeLink(baseURL string, cat bookmeta.Category, r bookmeta.AlphaRange) Link {
+	return Link{
+		Href:  baseURL + "/opds/" + cat.PathSegment + "/" + r.ID,
+		Type:  MediaType,
+		Title: fmt.Sprintf("%s (%d)", r.Label, r.LeafCount),
+	}
+}
+
+// buildCategoryNavigationFeed renders a navigation feed listing every group
+// in a category (author, title, or series) — or, once there are more than
+// bookmeta.RangeGroupThreshold of them, alphabetical ranges of those groups
+// instead. This is the single implementation shared by
+// BuildAuthorNavigationFeed, BuildTitleNavigationFeed, and
+// BuildSeriesNavigationFeed, which differ only in which groups they list.
+// page is 1-indexed.
+func buildCategoryNavigationFeed(baseURL string, cat bookmeta.Category, items []bookmeta.CategoryItem, page int, updatedAt time.Time) feeds.Feed {
+	adapters := make([]bookmeta.AlphaRanged, len(items))
+	for i, it := range items {
+		adapters[i] = it
+	}
+	ranges, _ := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, cat.PathSegment)
+
+	basePath := "/opds/" + cat.PathSegment + "/"
+	feed := Feed{
+		Metadata: FeedMetadata{
+			Title:        cat.Title,
+			ItemsPerPage: pagination.PageSize,
+		},
+		Links: []Link{
+			{Rel: "self", Href: baseURL + basePath + pageQueryString(page), Type: MediaType},
+			{Rel: "up", Href: baseURL + "/opds", Type: MediaType},
+		},
+		Navigation: []Link{},
+	}
+	if !updatedAt.IsZero() {
+		feed.Metadata.Modified = updatedAt.UTC().Format(time.RFC3339)
+	}
+
+	if len(ranges) == 1 && ranges[0].ID == "all" {
+		pageItems, _, totalPages := pagination.Paginate(items, page)
+		feed.Links = append(feed.Links, paginationLinks(baseURL, basePath, page, totalPages, MediaType)...)
+		for _, item := range pageItems {
+			feed.Navigation = append(feed.Navigation, buildCategoryItemLink(baseURL, cat, item))
+		}
+		return feed
+	}
+
+	pageRanges, _, totalPages := pagination.Paginate(ranges, page)
+	feed.Links = append(feed.Links, paginationLinks(baseURL, basePath, page, totalPages, MediaType)...)
+	for _, r := range pageRanges {
+		feed.Navigation = append(feed.Navigation, buildRangeLink(baseURL, cat, r))
+	}
+	return feed
+}
+
+// buildCategoryRangeFeed renders the groups (authors or series) within one
+// alphabetical range bucket, e.g. "/opds/authors/range/a-c". This is the
+// single implementation shared by BuildAuthorRangeFeed and
+// BuildSeriesRangeFeed. (Title's range feed lists books directly instead of
+// title-groups, since GroupByTitle's groups are exact-title buckets rather
+// than meaningfully-sized collections worth clicking into — see
+// BuildTitleRangeFeed.) page is 1-indexed.
+func buildCategoryRangeFeed(baseURL string, cat bookmeta.Category, items []bookmeta.CategoryItem, rangeID string, page int, updatedAt time.Time) feeds.Feed {
+	adapters := make([]bookmeta.AlphaRanged, len(items))
+	for i, it := range items {
+		adapters[i] = it
+	}
+	_, grouped := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, cat.PathSegment)
+	rangeItems := grouped[rangeID]
+
+	pageItems, _, totalPages := pagination.Paginate(rangeItems, page)
+
+	basePath := "/opds/" + cat.PathSegment + "/"
+	selfPath := basePath + rangeID
+	feed := Feed{
+		Metadata: FeedMetadata{
+			Title:        cat.Title,
+			ItemsPerPage: pagination.PageSize,
+		},
+		Links: []Link{
+			{Rel: "self", Href: baseURL + selfPath + pageQueryString(page), Type: MediaType},
+			{Rel: "up", Href: baseURL + basePath, Type: MediaType},
+		},
+		Navigation: []Link{},
+	}
+	if !updatedAt.IsZero() {
+		feed.Metadata.Modified = updatedAt.UTC().Format(time.RFC3339)
+	}
+	feed.Links = append(feed.Links, paginationLinks(baseURL, selfPath, page, totalPages, MediaType)...)
+
+	for _, item := range pageItems {
+		feed.Navigation = append(feed.Navigation, buildCategoryItemLink(baseURL, cat, item.(bookmeta.CategoryItem)))
+	}
+	return feed
+}
+
 // BuildNavigationFeed renders the catalog root as an OPDS 2.0 navigation
 // feed: one navigation entry per author, each pointing at the acquisition
-// feed built by BuildFeed for that author's books. baseURL must not have a
+// feed built by BuildAuthorFeed for that author's books. baseURL must not have a
 // trailing slash, e.g. "https://example.com".
 func (JSONFeed) BuildNavigationFeed(baseURL, title string, groups []bookmeta.AuthorGroup, updatedAt time.Time) feeds.Feed {
 	feed := Feed{
@@ -125,11 +242,11 @@ func (JSONFeed) BuildNavigationFeed(baseURL, title string, groups []bookmeta.Aut
 	return feed
 }
 
-// BuildFeed renders one author's books as a single-page OPDS 2.0 acquisition
+// BuildFAuthoreed renders one author's books as a single-page OPDS 2.0 acquisition
 // catalog. baseURL must not have a trailing slash, e.g. "https://example.com".
 // selfPath is this feed's own path, e.g. "/opds/authors/weir-andy".
 // page is 1-indexed.
-func (JSONFeed) BuildFeed(baseURL, selfPath, title string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
+func (JSONFeed) BuildAuthorFeed(baseURL, selfPath, title string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
 	pageBooks, _, totalPages := pagination.Paginate(books, page)
 
 	feed := Feed{
@@ -146,33 +263,7 @@ func (JSONFeed) BuildFeed(baseURL, selfPath, title string, books []model.Book, p
 	if !updatedAt.IsZero() {
 		feed.Metadata.Modified = updatedAt.UTC().Format(time.RFC3339)
 	}
-
-	if totalPages > 1 {
-		if page > 1 {
-			feed.Links = append(feed.Links, Link{
-				Rel:  "first",
-				Href: baseURL + selfPath,
-				Type: MediaType,
-			})
-			feed.Links = append(feed.Links, Link{
-				Rel:  "previous",
-				Href: baseURL + selfPath + pageQueryString(page - 1),
-				Type: MediaType,
-			})
-		}
-		if page < totalPages {
-			feed.Links = append(feed.Links, Link{
-				Rel:  "next",
-				Href: baseURL + selfPath + pageQueryString(page + 1),
-				Type: MediaType,
-			})
-			feed.Links = append(feed.Links, Link{
-				Rel:  "last",
-				Href: baseURL + selfPath + pageQueryString(totalPages),
-				Type: MediaType,
-			})
-		}
-	}
+	feed.Links = append(feed.Links, paginationLinks(baseURL, selfPath, page, totalPages, MediaType)...)
 
 	padding := bookmeta.MaxSequencePadding(pageBooks)
 	for _, b := range pageBooks {
@@ -289,257 +380,22 @@ func (JSONFeed) BuildRootFeed(baseURL, title string, books []model.Book, updated
 // BuildAuthorNavigationFeed renders a navigation feed of authors (or alphabetical
 // ranges of authors if there are more than RangeGroupThreshold items). Each author links to their books.
 // page is 1-indexed.
-func (JSONFeed) BuildAuthorNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
-	groups := bookmeta.GroupByAuthor(books)
-
-	adapters := make([]bookmeta.AlphaRanged, len(groups))
-	for i := range groups {
-		adapters[i] = &bookmeta.AuthorRangeAdapter{Group: &groups[i]}
-	}
-
-	ranges, _ := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, "authors")
-
-	var items []bookmeta.AlphaRanged
-	if len(ranges) == 1 && ranges[0].ID == "all" {
-		items = make([]bookmeta.AlphaRanged, len(groups))
-		for i := range groups {
-			items[i] = &bookmeta.AuthorRangeAdapter{Group: &groups[i]}
-		}
-	} else {
-		items = make([]bookmeta.AlphaRanged, len(ranges))
-		for i := range ranges {
-			items[i] = &AlphaRangeWrapper{Range: &ranges[i]}
-		}
-	}
-
-	pageItems, _, totalPages := pagination.Paginate(items, page)
-
-	feed := Feed{
-		Metadata: FeedMetadata{
-			Title:        "Authors",
-			ItemsPerPage: pagination.PageSize,
-		},
-		Links: []Link{
-			{Rel: "self", Href: baseURL + "/opds/authors/" + pageQueryString(page), Type: MediaType},
-			{Rel: "up", Href: baseURL + "/opds", Type: MediaType},
-		},
-		Navigation: []Link{},
-	}
-	if !updatedAt.IsZero() {
-		feed.Metadata.Modified = updatedAt.UTC().Format(time.RFC3339)
-	}
-
-	if totalPages > 1 {
-		if page > 1 {
-			feed.Links = append(feed.Links, Link{
-				Rel:  "first",
-				Href: baseURL + "/opds/authors/",
-				Type: MediaType,
-			})
-			feed.Links = append(feed.Links, Link{
-				Rel:  "previous",
-				Href: baseURL + "/opds/authors/" + pageQueryString(page-1),
-				Type: MediaType,
-			})
-		}
-		if page < totalPages {
-			feed.Links = append(feed.Links, Link{
-				Rel:  "next",
-				Href: baseURL + "/opds/authors/" + pageQueryString(page+1),
-				Type: MediaType,
-			})
-			feed.Links = append(feed.Links, Link{
-				Rel:  "last",
-				Href: baseURL + "/opds/authors/" + pageQueryString(totalPages),
-				Type: MediaType,
-			})
-		}
-	}
-
-	if len(ranges) == 1 && ranges[0].ID == "all" {
-		for _, item := range pageItems {
-			group := item.(*bookmeta.AuthorRangeAdapter).Group
-			feed.Navigation = append(feed.Navigation, Link{
-				Href:  baseURL + "/opds/authors/" + group.ID,
-				Type:  MediaType,
-				Title: fmt.Sprintf("%s (%d)", group.DisplayName, len(group.Books)),
-			})
-		}
-	} else {
-		for _, item := range pageItems {
-			wrapper := item.(*AlphaRangeWrapper)
-			feed.Navigation = append(feed.Navigation, Link{
-				Href:  baseURL + "/opds/authors/" + wrapper.Range.ID,
-				Type:  MediaType,
-				Title: fmt.Sprintf("%s (%d)", wrapper.Range.Label, wrapper.Range.LeafCount),
-			})
-		}
-	}
-
-	return feed
+func (JSONFeed) BuildAuthorNavigationFeed(baseURL string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
+	return buildCategoryNavigationFeed(baseURL, bookmeta.AuthorCategory, bookmeta.AuthorCategoryItems(books), page, updatedAt)
 }
 
 // BuildAuthorRangeFeed renders a navigation feed of authors in a specific
 // alphabetical range (e.g., a-c). Each author links to their books.
 // page is 1-indexed.
 func (JSONFeed) BuildAuthorRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) feeds.Feed {
-	groups := bookmeta.GroupByAuthor(books)
-
-	adapters := make([]bookmeta.AlphaRanged, len(groups))
-	for i := range groups {
-		adapters[i] = &bookmeta.AuthorRangeAdapter{Group: &groups[i]}
-	}
-
-	_, grouped := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, "authors")
-	rangeItems := grouped[rangeID]
-
-	pageItems, _, totalPages := pagination.Paginate(rangeItems, page)
-
-	feed := Feed{
-		Metadata: FeedMetadata{
-			Title:        "Authors",
-			ItemsPerPage: pagination.PageSize,
-		},
-		Links: []Link{
-			{Rel: "self", Href: baseURL + "/opds/authors/" + rangeID + pageQueryString(page), Type: MediaType},
-			{Rel: "up", Href: baseURL + "/opds/authors/", Type: MediaType},
-		},
-		Navigation: []Link{},
-	}
-	if !updatedAt.IsZero() {
-		feed.Metadata.Modified = updatedAt.UTC().Format(time.RFC3339)
-	}
-
-	if totalPages > 1 {
-		if page > 1 {
-			feed.Links = append(feed.Links, Link{
-				Rel:  "first",
-				Href: baseURL + "/opds/authors/" + rangeID,
-				Type: MediaType,
-			})
-			feed.Links = append(feed.Links, Link{
-				Rel:  "previous",
-				Href: baseURL + "/opds/authors/" + rangeID + pageQueryString(page-1),
-				Type: MediaType,
-			})
-		}
-		if page < totalPages {
-			feed.Links = append(feed.Links, Link{
-				Rel:  "next",
-				Href: baseURL + "/opds/authors/" + rangeID + pageQueryString(page+1),
-				Type: MediaType,
-			})
-			feed.Links = append(feed.Links, Link{
-				Rel:  "last",
-				Href: baseURL + "/opds/authors/" + rangeID + pageQueryString(totalPages),
-				Type: MediaType,
-			})
-		}
-	}
-
-	for _, adapter := range pageItems {
-		group := adapter.(*bookmeta.AuthorRangeAdapter).Group
-		feed.Navigation = append(feed.Navigation, Link{
-			Href:  baseURL + "/opds/authors/" + group.ID,
-			Type:  MediaType,
-			Title: fmt.Sprintf("%s (%d)", group.DisplayName, len(group.Books)),
-		})
-	}
-
-	return feed
+	return buildCategoryRangeFeed(baseURL, bookmeta.AuthorCategory, bookmeta.AuthorCategoryItems(books), rangeID, page, updatedAt)
 }
 
 // BuildTitleNavigationFeed renders a navigation feed of titles (or alphabetical
 // ranges of titles if there are more than RangeGroupThreshold items). Each title links to all books with that title.
 // page is 1-indexed.
-func (JSONFeed) BuildTitleNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
-	groups := bookmeta.GroupByTitle(books)
-
-	adapters := make([]bookmeta.AlphaRanged, len(groups))
-	for i := range groups {
-		adapters[i] = &bookmeta.TitleRangeAdapter{Group: &groups[i]}
-	}
-
-	ranges, _ := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, "titles")
-
-	var items []bookmeta.AlphaRanged
-	if len(ranges) == 1 && ranges[0].ID == "all" {
-		items = make([]bookmeta.AlphaRanged, len(groups))
-		for i := range groups {
-			items[i] = &bookmeta.TitleRangeAdapter{Group: &groups[i]}
-		}
-	} else {
-		items = make([]bookmeta.AlphaRanged, len(ranges))
-		for i := range ranges {
-			items[i] = &AlphaRangeWrapper{Range: &ranges[i]}
-		}
-	}
-
-	pageItems, _, totalPages := pagination.Paginate(items, page)
-
-	feed := Feed{
-		Metadata: FeedMetadata{
-			Title:        "Titles",
-			ItemsPerPage: pagination.PageSize,
-		},
-		Links: []Link{
-			{Rel: "self", Href: baseURL + "/opds/titles/" + pageQueryString(page), Type: MediaType},
-			{Rel: "up", Href: baseURL + "/opds", Type: MediaType},
-		},
-		Navigation: []Link{},
-	}
-	if !updatedAt.IsZero() {
-		feed.Metadata.Modified = updatedAt.UTC().Format(time.RFC3339)
-	}
-
-	if totalPages > 1 {
-		if page > 1 {
-			feed.Links = append(feed.Links, Link{
-				Rel:  "first",
-				Href: baseURL + "/opds/titles/",
-				Type: MediaType,
-			})
-			feed.Links = append(feed.Links, Link{
-				Rel:  "previous",
-				Href: baseURL + "/opds/titles/" + pageQueryString(page-1),
-				Type: MediaType,
-			})
-		}
-		if page < totalPages {
-			feed.Links = append(feed.Links, Link{
-				Rel:  "next",
-				Href: baseURL + "/opds/titles/" + pageQueryString(page+1),
-				Type: MediaType,
-			})
-			feed.Links = append(feed.Links, Link{
-				Rel:  "last",
-				Href: baseURL + "/opds/titles/" + pageQueryString(totalPages),
-				Type: MediaType,
-			})
-		}
-	}
-
-	if len(ranges) == 1 && ranges[0].ID == "all" {
-		for _, item := range pageItems {
-			group := item.(*bookmeta.TitleRangeAdapter).Group
-			feed.Navigation = append(feed.Navigation, Link{
-				Href:  baseURL + "/opds/titles/" + fmt.Sprintf("%x", group.Title),
-				Type:  MediaType,
-				Title: fmt.Sprintf("%s (%d)", group.Title, len(group.Books)),
-			})
-		}
-	} else {
-		for _, item := range pageItems {
-			wrapper := item.(*AlphaRangeWrapper)
-			feed.Navigation = append(feed.Navigation, Link{
-				Href:  baseURL + "/opds/titles/" + wrapper.Range.ID,
-				Type:  MediaType,
-				Title: fmt.Sprintf("%s (%d)", wrapper.Range.Label, wrapper.Range.LeafCount),
-			})
-		}
-	}
-
-	return feed
+func (JSONFeed) BuildTitleNavigationFeed(baseURL string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
+	return buildCategoryNavigationFeed(baseURL, bookmeta.TitleCategory, bookmeta.TitleCategoryItems(books), page, updatedAt)
 }
 
 // BuildTitleRangeFeed renders all books in a specific alphabetical range as an acquisition feed.
@@ -562,6 +418,7 @@ func (JSONFeed) BuildTitleRangeFeed(baseURL string, books []model.Book, rangeID 
 	}
 
 	pageBooks, _, totalPages := pagination.Paginate(booksInRange, page)
+	selfPath := "/opds/titles/" + rangeID
 
 	feed := Feed{
 		Metadata: FeedMetadata{
@@ -569,7 +426,7 @@ func (JSONFeed) BuildTitleRangeFeed(baseURL string, books []model.Book, rangeID 
 			ItemsPerPage: pagination.PageSize,
 		},
 		Links: []Link{
-			{Rel: "self", Href: baseURL + "/opds/titles/" + rangeID + pageQueryString(page), Type: MediaType},
+			{Rel: "self", Href: baseURL + selfPath + pageQueryString(page), Type: MediaType},
 			{Rel: "up", Href: baseURL + "/opds/titles/", Type: MediaType},
 		},
 		Publications: make([]Publication, 0, len(pageBooks)),
@@ -577,33 +434,7 @@ func (JSONFeed) BuildTitleRangeFeed(baseURL string, books []model.Book, rangeID 
 	if !updatedAt.IsZero() {
 		feed.Metadata.Modified = updatedAt.UTC().Format(time.RFC3339)
 	}
-
-	if totalPages > 1 {
-		if page > 1 {
-			feed.Links = append(feed.Links, Link{
-				Rel:  "first",
-				Href: baseURL + "/opds/titles/" + rangeID,
-				Type: MediaType,
-			})
-			feed.Links = append(feed.Links, Link{
-				Rel:  "previous",
-				Href: baseURL + "/opds/titles/" + rangeID + pageQueryString(page-1),
-				Type: MediaType,
-			})
-		}
-		if page < totalPages {
-			feed.Links = append(feed.Links, Link{
-				Rel:  "next",
-				Href: baseURL + "/opds/titles/" + rangeID + pageQueryString(page+1),
-				Type: MediaType,
-			})
-			feed.Links = append(feed.Links, Link{
-				Rel:  "last",
-				Href: baseURL + "/opds/titles/" + rangeID + pageQueryString(totalPages),
-				Type: MediaType,
-			})
-		}
-	}
+	feed.Links = append(feed.Links, paginationLinks(baseURL, selfPath, page, totalPages, MediaType)...)
 
 	padding := bookmeta.MaxSequencePadding(pageBooks)
 	for _, b := range pageBooks {
@@ -633,33 +464,7 @@ func (JSONFeed) BuildTitleFeed(baseURL, titleName string, books []model.Book, pa
 	if !updatedAt.IsZero() {
 		feed.Metadata.Modified = updatedAt.UTC().Format(time.RFC3339)
 	}
-
-	if totalPages > 1 {
-		if page > 1 {
-			feed.Links = append(feed.Links, Link{
-				Rel:  "first",
-				Href: baseURL + selfPath,
-				Type: MediaType,
-			})
-			feed.Links = append(feed.Links, Link{
-				Rel:  "previous",
-				Href: baseURL + selfPath + pageQueryString(page-1),
-				Type: MediaType,
-			})
-		}
-		if page < totalPages {
-			feed.Links = append(feed.Links, Link{
-				Rel:  "next",
-				Href: baseURL + selfPath + pageQueryString(page+1),
-				Type: MediaType,
-			})
-			feed.Links = append(feed.Links, Link{
-				Rel:  "last",
-				Href: baseURL + selfPath + pageQueryString(totalPages),
-				Type: MediaType,
-			})
-		}
-	}
+	feed.Links = append(feed.Links, paginationLinks(baseURL, selfPath, page, totalPages, MediaType)...)
 
 	padding := bookmeta.MaxSequencePadding(pageBooks)
 	for _, b := range pageBooks {
@@ -671,164 +476,15 @@ func (JSONFeed) BuildTitleFeed(baseURL, titleName string, books []model.Book, pa
 // BuildSeriesNavigationFeed renders a navigation feed of series (or alphabetical
 // ranges if there are more than RangeGroupThreshold items). Each series links to books in that series.
 // page is 1-indexed.
-func (JSONFeed) BuildSeriesNavigationFeed(baseURL, title string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
-	groups := bookmeta.GroupBySeries(books)
-
-	adapters := make([]bookmeta.AlphaRanged, len(groups))
-	for i := range groups {
-		adapters[i] = &bookmeta.SeriesRangeAdapter{Group: &groups[i]}
-	}
-
-	ranges, _ := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, "series")
-
-	var items []bookmeta.AlphaRanged
-	if len(ranges) == 1 && ranges[0].ID == "all" {
-		items = make([]bookmeta.AlphaRanged, len(groups))
-		for i := range groups {
-			items[i] = &bookmeta.SeriesRangeAdapter{Group: &groups[i]}
-		}
-	} else {
-		items = make([]bookmeta.AlphaRanged, len(ranges))
-		for i := range ranges {
-			items[i] = &AlphaRangeWrapper{Range: &ranges[i]}
-		}
-	}
-
-	pageItems, _, totalPages := pagination.Paginate(items, page)
-
-	feed := Feed{
-		Metadata: FeedMetadata{
-			Title:        "Series",
-			ItemsPerPage: pagination.PageSize,
-		},
-		Links: []Link{
-			{Rel: "self", Href: baseURL + "/opds/series/" + pageQueryString(page), Type: MediaType},
-			{Rel: "up", Href: baseURL + "/opds", Type: MediaType},
-		},
-		Navigation: []Link{},
-	}
-	if !updatedAt.IsZero() {
-		feed.Metadata.Modified = updatedAt.UTC().Format(time.RFC3339)
-	}
-
-	if totalPages > 1 {
-		if page > 1 {
-			feed.Links = append(feed.Links, Link{
-				Rel:  "first",
-				Href: baseURL + "/opds/series/",
-				Type: MediaType,
-			})
-			feed.Links = append(feed.Links, Link{
-				Rel:  "previous",
-				Href: baseURL + "/opds/series/" + pageQueryString(page-1),
-				Type: MediaType,
-			})
-		}
-		if page < totalPages {
-			feed.Links = append(feed.Links, Link{
-				Rel:  "next",
-				Href: baseURL + "/opds/series/" + pageQueryString(page+1),
-				Type: MediaType,
-			})
-			feed.Links = append(feed.Links, Link{
-				Rel:  "last",
-				Href: baseURL + "/opds/series/" + pageQueryString(totalPages),
-				Type: MediaType,
-			})
-		}
-	}
-
-	if len(ranges) == 1 && ranges[0].ID == "all" {
-		for _, item := range pageItems {
-			group := item.(*bookmeta.SeriesRangeAdapter).Group
-			feed.Navigation = append(feed.Navigation, Link{
-				Href:  baseURL + "/opds/series/" + group.ID,
-				Type:  MediaType,
-				Title: fmt.Sprintf("%s (%d)", group.Name, len(group.Books)),
-			})
-		}
-	} else {
-		for _, item := range pageItems {
-			wrapper := item.(*AlphaRangeWrapper)
-			feed.Navigation = append(feed.Navigation, Link{
-				Href:  baseURL + "/opds/series/" + wrapper.Range.ID,
-				Type:  MediaType,
-				Title: fmt.Sprintf("%s (%d)", wrapper.Range.Label, wrapper.Range.LeafCount),
-			})
-		}
-	}
-
-	return feed
+func (JSONFeed) BuildSeriesNavigationFeed(baseURL string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
+	return buildCategoryNavigationFeed(baseURL, bookmeta.SeriesCategory, bookmeta.SeriesCategoryItems(books), page, updatedAt)
 }
 
 // BuildSeriesRangeFeed renders a navigation feed of series in a specific
 // alphabetical range. Each series links to books in that series.
 // page is 1-indexed.
 func (JSONFeed) BuildSeriesRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) feeds.Feed {
-	groups := bookmeta.GroupBySeries(books)
-
-	adapters := make([]bookmeta.AlphaRanged, len(groups))
-	for i := range groups {
-		adapters[i] = &bookmeta.SeriesRangeAdapter{Group: &groups[i]}
-	}
-
-	_, grouped := bookmeta.GroupByAlphaRange(adapters, bookmeta.RangeGroupThreshold, "series")
-	rangeItems := grouped[rangeID]
-
-	pageItems, _, totalPages := pagination.Paginate(rangeItems, page)
-
-	feed := Feed{
-		Metadata: FeedMetadata{
-			Title:        "Series",
-			ItemsPerPage: pagination.PageSize,
-		},
-		Links: []Link{
-			{Rel: "self", Href: baseURL + "/opds/series/" + rangeID + pageQueryString(page), Type: MediaType},
-			{Rel: "up", Href: baseURL + "/opds/series/", Type: MediaType},
-		},
-		Navigation: []Link{},
-	}
-	if !updatedAt.IsZero() {
-		feed.Metadata.Modified = updatedAt.UTC().Format(time.RFC3339)
-	}
-
-	if totalPages > 1 {
-		if page > 1 {
-			feed.Links = append(feed.Links, Link{
-				Rel:  "first",
-				Href: baseURL + "/opds/series/" + rangeID,
-				Type: MediaType,
-			})
-			feed.Links = append(feed.Links, Link{
-				Rel:  "previous",
-				Href: baseURL + "/opds/series/" + rangeID + pageQueryString(page-1),
-				Type: MediaType,
-			})
-		}
-		if page < totalPages {
-			feed.Links = append(feed.Links, Link{
-				Rel:  "next",
-				Href: baseURL + "/opds/series/" + rangeID + pageQueryString(page+1),
-				Type: MediaType,
-			})
-			feed.Links = append(feed.Links, Link{
-				Rel:  "last",
-				Href: baseURL + "/opds/series/" + rangeID + pageQueryString(totalPages),
-				Type: MediaType,
-			})
-		}
-	}
-
-	for _, adapter := range pageItems {
-		group := adapter.(*bookmeta.SeriesRangeAdapter).Group
-		feed.Navigation = append(feed.Navigation, Link{
-			Href:  baseURL + "/opds/series/" + group.ID,
-			Type:  MediaType,
-			Title: fmt.Sprintf("%s (%d)", group.Name, len(group.Books)),
-		})
-	}
-
-	return feed
+	return buildCategoryRangeFeed(baseURL, bookmeta.SeriesCategory, bookmeta.SeriesCategoryItems(books), rangeID, page, updatedAt)
 }
 
 // BuildSeriesFeed renders all books in a specific series as an acquisition feed.
@@ -851,33 +507,7 @@ func (JSONFeed) BuildSeriesFeed(baseURL, seriesID, seriesName string, books []mo
 	if !updatedAt.IsZero() {
 		feed.Metadata.Modified = updatedAt.UTC().Format(time.RFC3339)
 	}
-
-	if totalPages > 1 {
-		if page > 1 {
-			feed.Links = append(feed.Links, Link{
-				Rel:  "first",
-				Href: baseURL + selfPath,
-				Type: MediaType,
-			})
-			feed.Links = append(feed.Links, Link{
-				Rel:  "previous",
-				Href: baseURL + selfPath + pageQueryString(page-1),
-				Type: MediaType,
-			})
-		}
-		if page < totalPages {
-			feed.Links = append(feed.Links, Link{
-				Rel:  "next",
-				Href: baseURL + selfPath + pageQueryString(page+1),
-				Type: MediaType,
-			})
-			feed.Links = append(feed.Links, Link{
-				Rel:  "last",
-				Href: baseURL + selfPath + pageQueryString(totalPages),
-				Type: MediaType,
-			})
-		}
-	}
+	feed.Links = append(feed.Links, paginationLinks(baseURL, selfPath, page, totalPages, MediaType)...)
 
 	padding := bookmeta.MaxSequencePadding(pageBooks)
 	for _, b := range pageBooks {

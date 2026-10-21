@@ -16,8 +16,8 @@ import (
 	"github.com/chadmiller/opds-audiobookshelf/internal/bookmeta"
 	"github.com/chadmiller/opds-audiobookshelf/internal/catalog"
 	"github.com/chadmiller/opds-audiobookshelf/internal/feeds"
-	"github.com/chadmiller/opds-audiobookshelf/internal/feeds/atom"
-	"github.com/chadmiller/opds-audiobookshelf/internal/feeds/json"
+	opdsatom "github.com/chadmiller/opds-audiobookshelf/internal/feeds/atom"
+	opdsjson "github.com/chadmiller/opds-audiobookshelf/internal/feeds/json"
 	"github.com/chadmiller/opds-audiobookshelf/internal/model"
 	"github.com/chadmiller/opds-audiobookshelf/internal/pathmap"
 	"github.com/chadmiller/opds-audiobookshelf/internal/placeholder"
@@ -97,7 +97,7 @@ func (s *Server) handleAuthorOrRange(w http.ResponseWriter, r *http.Request) {
 	builder := negotiateBuilder(r)
 
 	if id == "" {
-		writeFeed(w, r, builder.BuildAuthorNavigationFeed(base, s.title, books, page, updatedAt))
+		writeFeed(w, r, builder.BuildAuthorNavigationFeed(base, books, page, updatedAt))
 		return
 	} else if isRange := isAlphaRange(id); isRange {
 		writeFeed(w, r, builder.BuildAuthorRangeFeed(base, books, id, page, updatedAt))
@@ -112,7 +112,7 @@ func (s *Server) handleAuthorOrRange(w http.ResponseWriter, r *http.Request) {
 	}
 	selfPath := "/opds/authors/" + group.ID
 
-	writeFeed(w, r, builder.BuildFeed(base, selfPath, group.DisplayName, group.Books, page, updatedAt))
+	writeFeed(w, r, builder.BuildAuthorFeed(base, selfPath, group.DisplayName, group.Books, page, updatedAt))
 }
 
 // handleTitleOrRange serves either a navigation feed of titles/ranges or all books with a specific title.
@@ -124,7 +124,7 @@ func (s *Server) handleTitleOrRange(w http.ResponseWriter, r *http.Request) {
 	builder := negotiateBuilder(r)
 
 	if id == "" {
-		writeFeed(w, r, builder.BuildTitleNavigationFeed(base, s.title, books, page, updatedAt))
+		writeFeed(w, r, builder.BuildTitleNavigationFeed(base, books, page, updatedAt))
 		return
 	} else if isRange := isAlphaRange(id); isRange {
 		writeFeed(w, r, builder.BuildTitleRangeFeed(base, books, id, page, updatedAt))
@@ -159,7 +159,7 @@ func (s *Server) handleSeriesOrRange(w http.ResponseWriter, r *http.Request) {
 	builder := negotiateBuilder(r)
 
 	if id == "" {
-		writeFeed(w, r, builder.BuildSeriesNavigationFeed(base, s.title, books, page, updatedAt))
+		writeFeed(w, r, builder.BuildSeriesNavigationFeed(base, books, page, updatedAt))
 		return
 	} else if isRange := isAlphaRange(id); isRange {
 		writeFeed(w, r, builder.BuildSeriesRangeFeed(base, books, id, page, updatedAt))
