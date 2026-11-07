@@ -292,7 +292,7 @@ func buildEntryWithSeriesPrefix(baseURL string, b model.Book, updatedStr string,
 		Links: []Link{
 			{
 				Rel:  "http://opds-spec.org/acquisition",
-				Href: baseURL + "/download/" + b.LibraryItemID,
+				Href: baseURL + "/opds/-/download/" + b.LibraryItemID,
 				Type: bookmeta.EbookMimeType(b),
 			},
 		},
@@ -310,7 +310,7 @@ func buildEntryWithSeriesPrefix(baseURL string, b model.Book, updatedStr string,
 	}
 	entry.Links = append(entry.Links, Link{
 		Rel:  "http://opds-spec.org/image",
-		Href: baseURL + "/covers/" + b.LibraryItemID,
+		Href: baseURL + "/opds/-/covers/" + b.LibraryItemID,
 		Type: coverType,
 	})
 

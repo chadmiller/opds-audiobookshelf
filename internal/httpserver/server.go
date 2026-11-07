@@ -48,13 +48,14 @@ func New(store *catalog.Store, filesRoot, title string) *Server {
 		title:     title,
 		mux:       http.NewServeMux(),
 	}
+	s.mux.HandleFunc("/opds/", s.handleRoot)
 	s.mux.HandleFunc("/opds", s.handleRoot)
 	s.mux.HandleFunc("/", s.handleRoot)
 	s.mux.HandleFunc("/opds/authors/", s.handleAuthorOrRange)
 	s.mux.HandleFunc("/opds/titles/", s.handleTitleOrRange)
 	s.mux.HandleFunc("/opds/series/", s.handleSeriesOrRange)
-	s.mux.HandleFunc("/download/", s.handleDownload)
-	s.mux.HandleFunc("/covers/", s.handleCover)
+	s.mux.HandleFunc("/opds/-/download/", s.handleDownload)
+	s.mux.HandleFunc("/opds/-/covers/", s.handleCover)
 	return s
 }
 
@@ -192,7 +193,7 @@ func writeFeed(w http.ResponseWriter, r *http.Request, feed feeds.Feed) {
 }
 
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(r.URL.Path, "/download/")
+	id := strings.TrimPrefix(r.URL.Path, "/opds/-/download/")
 	book, ok := s.findBook(id)
 	if !ok {
 		http.NotFound(w, r)
@@ -210,7 +211,7 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCover(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(r.URL.Path, "/covers/")
+	id := strings.TrimPrefix(r.URL.Path, "/opds/-/covers/")
 	book, ok := s.findBook(id)
 	if !ok {
 		http.NotFound(w, r)

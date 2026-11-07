@@ -312,7 +312,7 @@ func buildPublicationWithSeriesPrefix(baseURL string, b model.Book, padding int,
 		Links: []Link{
 			{
 				Rel:  "http://opds-spec.org/acquisition",
-				Href: baseURL + "/download/" + b.LibraryItemID,
+				Href: baseURL + "/opds/-/download/" + b.LibraryItemID,
 				Type: bookmeta.EbookMimeType(b),
 			},
 		},
@@ -325,7 +325,7 @@ func buildPublicationWithSeriesPrefix(baseURL string, b model.Book, padding int,
 	pub.Images = []Link{
 		{
 			Rel:  "http://opds-spec.org/image",
-			Href: baseURL + "/covers/" + b.LibraryItemID,
+			Href: baseURL + "/opds/-/covers/" + b.LibraryItemID,
 			Type: coverType,
 		},
 	}
