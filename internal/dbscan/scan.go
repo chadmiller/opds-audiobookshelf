@@ -135,14 +135,22 @@ func Scan(dbPath string, libraryNames []string) ([]model.Book, error) {
 			return nil, fmt.Errorf("scan row: %w", err)
 		}
 
-		if !ebookFileJSON.Valid || ebookFileJSON.String == "" {
+		if !ebookFileJSON.Valid {
+			fmt.Printf("Skipping book because of invalid JSON: %s\n", id)
+			continue
+		}
+
+		if ebookFileJSON.String == "" {
+			fmt.Printf("Skipping book because missing ebook file: %s\n", id)
 			continue
 		}
 		var ebook model.EbookFile
 		if err := json.Unmarshal([]byte(ebookFileJSON.String), &ebook); err != nil {
+			fmt.Printf("Skipping book because of unparsable JSON: %s, %v\n", id, err)
 			continue
 		}
 		if ebook.Metadata.Path == "" {
+			fmt.Printf("Skipping book because missing ebook file path: %s\n", id)
 			continue
 		}
 
