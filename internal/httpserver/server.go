@@ -8,7 +8,7 @@ import (
 	"log"
 	"mime"
 	"net/http"
-	"path/filepath"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -19,7 +19,6 @@ import (
 	opdsatom "github.com/chadmiller/opds-audiobookshelf/internal/feeds/atom"
 	opdsjson "github.com/chadmiller/opds-audiobookshelf/internal/feeds/json"
 	"github.com/chadmiller/opds-audiobookshelf/internal/model"
-	"github.com/chadmiller/opds-audiobookshelf/internal/pathmap"
 	"github.com/chadmiller/opds-audiobookshelf/internal/placeholder"
 )
 
@@ -32,21 +31,20 @@ func negotiateBuilder(r *http.Request) feeds.Builder {
 
 // Server serves the OPDS catalog and the files it references.
 type Server struct {
-	store     *catalog.Store
-	filesRoot string
-	title     string
-	mux       *http.ServeMux
+	store *catalog.Store
+	files catalog.Files
+	title string
+	mux   *http.ServeMux
 }
 
-// New builds a Server. filesRoot is the on-disk directory that stands in for
-// the filesystem root as seen inside the Audiobookshelf container: paths
-// read from the database are resolved as filepath.Join(filesRoot, dbPath).
-func New(store *catalog.Store, filesRoot, title string) *Server {
+// New builds a Server. files provides the bytes of the ebooks and covers the
+// catalog refers to.
+func New(store *catalog.Store, files catalog.Files, title string) *Server {
 	s := &Server{
-		store:     store,
-		filesRoot: filesRoot,
-		title:     title,
-		mux:       http.NewServeMux(),
+		store: store,
+		files: files,
+		title: title,
+		mux:   http.NewServeMux(),
 	}
 	s.mux.HandleFunc("/opds/", s.handleRoot)
 	s.mux.HandleFunc("/opds", s.handleRoot)
@@ -200,13 +198,15 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Failed to find download object", id)
 		return
 	}
-	hostPath := pathmap.HostPath(s.filesRoot, book, book.Ebook.Metadata.Path)
 	name := book.Ebook.Metadata.Filename
 	if name == "" {
-		name = filepath.Base(hostPath)
+		name = path.Base(book.Ebook.Metadata.Path)
 	}
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
-	http.ServeFile(w, r, hostPath)
+	if err := s.files.ServeEbook(w, r, book); err != nil {
+		log.Printf("download %s: %v", id, err)
+		return
+	}
 	fmt.Println("successfully answered download", r.URL)
 }
 
@@ -218,14 +218,13 @@ func (s *Server) handleCover(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Failed to find book cover", id)
 		return
 	}
-	if !book.CoverResolvable {
-		w.Header().Set("Content-Type", placeholder.MimeType)
-		http.ServeContent(w, r, "cover.png", time.Time{}, bytes.NewReader(placeholder.PNG))
-		fmt.Println("successfully answered cover (placeholder)", r.URL)
+	if book.CoverResolvable && s.files.ServeCover(w, r, book) {
+		fmt.Println("successfully answered cover", r.URL)
 		return
 	}
-	http.ServeFile(w, r, pathmap.HostPath(s.filesRoot, book, book.CoverPath))
-	fmt.Println("successfully answered cover", r.URL)
+	w.Header().Set("Content-Type", placeholder.MimeType)
+	http.ServeContent(w, r, "cover.png", time.Time{}, bytes.NewReader(placeholder.PNG))
+	fmt.Println("successfully answered cover (placeholder)", r.URL)
 }
 
 func (s *Server) findBook(id string) (model.Book, bool) {
