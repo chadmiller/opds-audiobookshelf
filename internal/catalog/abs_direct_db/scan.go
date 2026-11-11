@@ -1,6 +1,6 @@
 // Package dbscan reads the Audiobookshelf sqlite database and extracts the
 // rows belonging to the "ebooks" library.
-package dbscan
+package abs_direct_db
 
 import (
 	"database/sql"
@@ -53,10 +53,19 @@ WHERE l.name IN (%s)
 GROUP BY li.id
 `
 
-// Scan opens dbPath read-only, runs the library query restricted to
+// Client is a catalog.Source that reads the sqlite database at Path, and a
+// catalog.Files that serves book files from FilesRoot, the directory that
+// stands in for the filesystem root as seen inside the Audiobookshelf
+// container.
+type Client struct {
+	Path      string
+	FilesRoot string
+}
+
+// Scan opens the database read-only, runs the library query restricted to
 // libraryNames, and returns the resulting catalog. The database connection
 // is closed before returning.
-func Scan(dbPath string, libraryNames []string) ([]model.Book, error) {
+func (sc Client) Scan(libraryNames []string) ([]model.Book, error) {
 	if len(libraryNames) == 0 {
 		return nil, fmt.Errorf("no library names given")
 	}
@@ -69,7 +78,7 @@ func Scan(dbPath string, libraryNames []string) ([]model.Book, error) {
 	}
 	query := fmt.Sprintf(queryTemplate, strings.Join(placeholders, ", "))
 
-	dsn := fmt.Sprintf("file:%s?mode=ro&immutable=0", dbPath)
+	dsn := fmt.Sprintf("file:%s?mode=ro&immutable=0", sc.Path)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)

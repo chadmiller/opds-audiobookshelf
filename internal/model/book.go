@@ -1,5 +1,5 @@
 // Package model holds the in-memory representation of a catalog entry
-// scanned out of the Audiobookshelf sqlite database.
+// scanned from Audiobookshelf (via its API or its sqlite database).
 package model
 
 // EbookFile mirrors the JSON shape Audiobookshelf stores in books.ebookFile.
