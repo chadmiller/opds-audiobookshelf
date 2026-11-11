@@ -36,7 +36,12 @@ SELECT
 	b.coverPath,
 	b.ebookFile,
 	COALESCE(s.name, '') as seriesName,
-	COALESCE(bs.sequence, '') as seriesSequence
+	COALESCE(bs.sequence, '') as seriesSequence,
+	li.mediaType = 'book' as correctMediaType,
+	li.isFile <> 0 as bareFile,
+	COALESCE(li.isMissing, 0) <> 0 as missing,
+	COALESCE(li.isInvalid, 0) <> 0 as invalid,
+	b.ebookFile IS NOT NULL as bookFileExists
 FROM "libraryItems" li
 JOIN "libraries" l ON li.libraryId = l.id
 JOIN "books" b ON li.mediaId = b.id
@@ -45,11 +50,6 @@ LEFT JOIN "authors" a ON ba.authorId = a.id
 LEFT JOIN "bookSeries" bs ON b.id = bs.bookId
 LEFT JOIN "series" s ON bs.seriesId = s.id
 WHERE l.name IN (%s)
-	AND li.mediaType = 'book'
-	AND li.isFile = 0
-	AND COALESCE(li.isMissing, 0) = 0
-	AND COALESCE(li.isInvalid, 0) = 0
-	AND b.ebookFile IS NOT NULL
 GROUP BY li.id
 `
 
@@ -107,7 +107,14 @@ func Scan(dbPath string, libraryNames []string) ([]model.Book, error) {
 			ebookFileJSON        sql.NullString
 			seriesName           sql.NullString
 			seriesSequence       sql.NullString
+
+			correctMediaType bool
+			bareFile         bool
+			missing          bool
+			invalid          bool
+			bookFileExists   bool
 		)
+
 		if err := rows.Scan(
 			&id,
 			&itemPath,
@@ -131,6 +138,11 @@ func Scan(dbPath string, libraryNames []string) ([]model.Book, error) {
 			&ebookFileJSON,
 			&seriesName,
 			&seriesSequence,
+			&correctMediaType,
+			&bareFile,
+			&missing,
+			&invalid,
+			&bookFileExists,
 		); err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)
 		}
@@ -151,6 +163,27 @@ func Scan(dbPath string, libraryNames []string) ([]model.Book, error) {
 		}
 		if ebook.Metadata.Path == "" {
 			fmt.Printf("Skipping book because missing ebook file path: %s\n", id)
+			continue
+		}
+
+		if !correctMediaType {
+			fmt.Printf("Skipping book because of incorrect media type: %s\n", id)
+			continue
+		}
+		if bareFile {
+			fmt.Printf("Skipping book because bare files have no side-data: %s\n", id)
+			continue
+		}
+		if missing {
+			fmt.Printf("Skipping book because of missing file: %s\n", id)
+			continue
+		}
+		if invalid {
+			fmt.Printf("Skipping book because of invalid file: %s\n", id)
+			continue
+		}
+		if !bookFileExists {
+			fmt.Printf("Skipping book because of book file is missing: %s\n", id)
 			continue
 		}
 
