@@ -99,6 +99,7 @@ func chooseBackend(dbPath, apiKey, apiAddress, filesRoot string) (catalog.Backen
 }
 
 func runScan(store *catalog.Store, backend catalog.Backend, libraryNames []string) {
+	start := time.Now()
 	books, err := backend.Scan(libraryNames)
 	if err != nil {
 		log.Printf("scan failed: %v", err)
@@ -112,5 +113,5 @@ func runScan(store *catalog.Store, backend catalog.Backend, libraryNames []strin
 		return
 	}
 	store.Set(books, time.Now())
-	log.Printf("scan updates catalog to %d ebooks", len(books))
+	log.Printf("scan updates catalog to %d ebooks after taking %s", len(books), time.Since(start))
 }
