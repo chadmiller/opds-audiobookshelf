@@ -21,8 +21,8 @@ import (
 // methods directly without needing to know they're talking to this package.
 type AtomFeed struct{}
 
-// MediaType is the media type of an OPDS 1.x acquisition feed.
-const MediaType = "application/atom+xml;profile=opds-catalog;kind=acquisition"
+// AcquisitionMediaType is the media type of an OPDS 1.x acquisition feed.
+const AcquisitionMediaType = "application/atom+xml;profile=opds-catalog;kind=acquisition"
 
 // NavigationMediaType is the media type of an OPDS 1.x navigation feed.
 const NavigationMediaType = "application/atom+xml;profile=opds-catalog;kind=navigation"
@@ -81,7 +81,7 @@ func (f Feed) ContentType() string {
 			return l.Type
 		}
 	}
-	return MediaType
+	return AcquisitionMediaType
 }
 
 // Encode writes f to w as indented XML with a standard XML header,
@@ -152,7 +152,7 @@ func buildCategoryItemEntry(baseURL string, cat bookmeta.Category, item bookmeta
 		ID:      cat.URNPrefix + item.ItemID(),
 		Updated: updatedStr,
 		Links: []Link{
-			{Rel: "subsection", Href: baseURL + "/opds/" + cat.PathSegment + "/" + item.ItemID(), Type: MediaType},
+			{Rel: "subsection", Href: baseURL + "/opds/" + cat.PathSegment + "/" + item.ItemID(), Type: AcquisitionMediaType},
 		},
 	}
 }
@@ -264,8 +264,8 @@ func (AtomFeed) BuildNavigationFeed(baseURL, title string, groups []bookmeta.Aut
 // "/opds/authors/weir-andy". page is 1-indexed.
 func (AtomFeed) BuildAuthorFeed(baseURL, selfPath, title string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
 	pageBooks, _, totalPages := pagination.Paginate(books, page)
-	feed := newFeed(baseURL, selfPath+pageQueryString(page), MediaType, title, updatedAt)
-	feed.Links = append(feed.Links, paginationLinks(baseURL, selfPath, page, totalPages, MediaType)...)
+	feed := newFeed(baseURL, selfPath+pageQueryString(page), AcquisitionMediaType, title, updatedAt)
+	feed.Links = append(feed.Links, paginationLinks(baseURL, selfPath, page, totalPages, AcquisitionMediaType)...)
 
 	feed.Entries = make([]Entry, 0, len(pageBooks))
 	padding := bookmeta.MaxSequencePadding(pageBooks)
@@ -297,8 +297,8 @@ func buildEntryWithSeriesPrefix(baseURL string, b model.Book, updatedStr string,
 			},
 		},
 	}
-	if b.AuthorName != "" {
-		entry.Authors = []Author{{Name: b.AuthorName}}
+	for _, a := range b.Authors {
+		entry.Authors = append(entry.Authors, Author{Name: a})
 	}
 	if b.Description != "" {
 		entry.Summary = &Summary{Type: "text", Text: b.Description}
@@ -326,7 +326,7 @@ func (AtomFeed) BuildRootFeed(baseURL, title string, books []model.Book, updated
 		ID:      "urn:opds:browse:recent",
 		Updated: feed.Updated,
 		Links: []Link{
-			{Rel: "subsection", Href: baseURL + "/opds/recent/", Type: MediaType},
+			{Rel: "subsection", Href: baseURL + "/opds/recent/", Type: NavigationMediaType},
 		},
 	}
 	feed.Entries[1] = Entry{
@@ -374,7 +374,7 @@ func (AtomFeed) BuildAuthorRangeFeed(baseURL string, books []model.Book, rangeID
 // unpaginated acquisition feed, each titled with its series prefix.
 func (AtomFeed) BuildRecentlyAdded(baseURL string, books []model.Book, updatedAt time.Time) feeds.Feed {
 	recent := bookmeta.RecentlyAdded(books, bookmeta.RecentlyAddedLimit)
-	feed := newFeed(baseURL, "/opds/recent/", MediaType, "Recently added", updatedAt)
+	feed := newFeed(baseURL, "/opds/recent/", AcquisitionMediaType, "Recently added", updatedAt)
 	feed.Links = append(feed.Links, Link{Rel: "up", Href: baseURL + "/opds", Type: NavigationMediaType})
 
 	feed.Entries = make([]Entry, 0, len(recent))
@@ -409,9 +409,9 @@ func (AtomFeed) BuildTitleRangeFeed(baseURL string, books []model.Book, rangeID 
 	pageBooks, _, totalPages := pagination.Paginate(booksInRange, page)
 
 	selfPath := "/opds/titles/" + rangeID
-	feed := newFeed(baseURL, selfPath+pageQueryString(page), MediaType, "Titles", updatedAt)
+	feed := newFeed(baseURL, selfPath+pageQueryString(page), AcquisitionMediaType, "Titles", updatedAt)
 	feed.Links = append(feed.Links, Link{Rel: "up", Href: baseURL + "/opds/titles/", Type: NavigationMediaType})
-	feed.Links = append(feed.Links, paginationLinks(baseURL, selfPath, page, totalPages, MediaType)...)
+	feed.Links = append(feed.Links, paginationLinks(baseURL, selfPath, page, totalPages, AcquisitionMediaType)...)
 
 	feed.Entries = make([]Entry, 0, len(pageBooks))
 	padding := bookmeta.MaxSequencePadding(pageBooks)
@@ -427,9 +427,9 @@ func (AtomFeed) BuildTitleFeed(baseURL, titleName string, books []model.Book, pa
 	pageBooks, _, totalPages := pagination.Paginate(books, page)
 	selfPath := "/opds/titles/" + fmt.Sprintf("%x", titleName)
 
-	feed := newFeed(baseURL, selfPath+pageQueryString(page), MediaType, titleName, updatedAt)
+	feed := newFeed(baseURL, selfPath+pageQueryString(page), AcquisitionMediaType, titleName, updatedAt)
 	feed.Links = append(feed.Links, Link{Rel: "up", Href: baseURL + "/opds/titles/", Type: NavigationMediaType})
-	feed.Links = append(feed.Links, paginationLinks(baseURL, selfPath, page, totalPages, MediaType)...)
+	feed.Links = append(feed.Links, paginationLinks(baseURL, selfPath, page, totalPages, AcquisitionMediaType)...)
 
 	feed.Entries = make([]Entry, 0, len(pageBooks))
 	padding := bookmeta.MaxSequencePadding(pageBooks)
@@ -457,9 +457,9 @@ func (AtomFeed) BuildSeriesFeed(baseURL, seriesID, seriesName string, books []mo
 	pageBooks, _, totalPages := pagination.Paginate(books, page)
 	selfPath := "/opds/series/" + seriesID
 
-	feed := newFeed(baseURL, selfPath+pageQueryString(page), MediaType, seriesName, updatedAt)
+	feed := newFeed(baseURL, selfPath+pageQueryString(page), AcquisitionMediaType, seriesName, updatedAt)
 	feed.Links = append(feed.Links, Link{Rel: "up", Href: baseURL + "/opds/series/", Type: NavigationMediaType})
-	feed.Links = append(feed.Links, paginationLinks(baseURL, selfPath, page, totalPages, MediaType)...)
+	feed.Links = append(feed.Links, paginationLinks(baseURL, selfPath, page, totalPages, AcquisitionMediaType)...)
 
 	feed.Entries = make([]Entry, 0, len(pageBooks))
 	padding := bookmeta.MaxSequencePadding(pageBooks)
