@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/chadmiller/opds-audiobookshelf/internal/bookmeta"
-	"github.com/chadmiller/opds-audiobookshelf/internal/model"
 	"github.com/chadmiller/opds-audiobookshelf/internal/feeds"
+	"github.com/chadmiller/opds-audiobookshelf/internal/model"
 	"github.com/chadmiller/opds-audiobookshelf/internal/pagination"
 	"github.com/chadmiller/opds-audiobookshelf/internal/placeholder"
 )
@@ -340,20 +340,25 @@ type BrowseOption struct {
 	LeafCount int
 }
 
-// BuildRootFeed renders the root catalog as a selection menu with three browse
-// options: by author, by title, by series. Each option shows the count of groups
-// (distinct authors, titles, or series).
+// BuildRootFeed renders the root catalog as a selection menu with four browse
+// options: recently added, by author, by title, by series. The latter three show
+// the count of groups (distinct authors, titles, or series).
 func (JSONFeed) BuildRootFeed(baseURL, title string, books []model.Book, updatedAt time.Time) feeds.Feed {
 
 	feed := Feed{
 		Metadata: FeedMetadata{
 			Title:        title,
-			ItemsPerPage: 3,
+			ItemsPerPage: 4,
 		},
 		Links: []Link{
 			{Rel: "self", Href: baseURL + "/opds", Type: MediaType},
 		},
 		Navigation: []Link{
+			{
+				Href:  baseURL + "/opds/recent/",
+				Type:  MediaType,
+				Title: "Recently added",
+			},
 			{
 				Href:  baseURL + "/opds/authors/",
 				Type:  MediaType,
@@ -373,6 +378,31 @@ func (JSONFeed) BuildRootFeed(baseURL, title string, books []model.Book, updated
 	}
 	if !updatedAt.IsZero() {
 		feed.Metadata.Modified = updatedAt.UTC().Format(time.RFC3339)
+	}
+	return feed
+}
+
+// BuildRecentlyAdded renders the most recently added books as a single,
+// unpaginated acquisition feed, each titled with its series prefix.
+func (JSONFeed) BuildRecentlyAdded(baseURL string, books []model.Book, updatedAt time.Time) feeds.Feed {
+	recent := bookmeta.RecentlyAdded(books, bookmeta.RecentlyAddedLimit)
+	feed := Feed{
+		Metadata: FeedMetadata{
+			Title:        "Recently added",
+			ItemsPerPage: bookmeta.RecentlyAddedLimit,
+		},
+		Links: []Link{
+			{Rel: "self", Href: baseURL + "/opds/recent/", Type: MediaType},
+			{Rel: "up", Href: baseURL + "/opds", Type: MediaType},
+		},
+		Publications: make([]Publication, 0, len(recent)),
+	}
+	if !updatedAt.IsZero() {
+		feed.Metadata.Modified = updatedAt.UTC().Format(time.RFC3339)
+	}
+	padding := bookmeta.MaxSequencePadding(recent)
+	for _, b := range recent {
+		feed.Publications = append(feed.Publications, buildPublication(baseURL, b, padding))
 	}
 	return feed
 }

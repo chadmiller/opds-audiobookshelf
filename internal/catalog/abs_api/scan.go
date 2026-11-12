@@ -47,6 +47,7 @@ type libraryItem struct {
 	IsFile    bool   `json:"isFile"`
 	IsMissing bool   `json:"isMissing"`
 	IsInvalid bool   `json:"isInvalid"`
+	AddedAt   int64  `json:"addedAt"` // Unix milliseconds
 	MediaType string `json:"mediaType"`
 	Media     struct {
 		CoverPath string           `json:"coverPath"`
@@ -188,6 +189,9 @@ func itemToBook(item libraryItem) (book model.Book, skipReason string) {
 		Genres:               m.Genres,
 		CoverPath:            item.Media.CoverPath,
 		Ebook:                *item.Media.EbookFile,
+	}
+	if item.AddedAt > 0 {
+		book.AddedAt = time.UnixMilli(item.AddedAt)
 	}
 	if len(m.Series) > 0 {
 		book.SeriesName = m.Series[0].Name

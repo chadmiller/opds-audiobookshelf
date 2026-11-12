@@ -53,10 +53,7 @@ WHERE l.name IN (%s)
 GROUP BY li.id
 `
 
-// Client is a catalog.Source that reads the sqlite database at Path, and a
-// catalog.Files that serves book files from FilesRoot, the directory that
-// stands in for the filesystem root as seen inside the Audiobookshelf
-// container.
+// Scanner is a catalog.Source that reads the sqlite database at Path.
 type Client struct {
 	Path      string
 	FilesRoot string

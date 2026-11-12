@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/chadmiller/opds-audiobookshelf/internal/bookmeta"
-	"github.com/chadmiller/opds-audiobookshelf/internal/model"
 	"github.com/chadmiller/opds-audiobookshelf/internal/feeds"
+	"github.com/chadmiller/opds-audiobookshelf/internal/model"
 	"github.com/chadmiller/opds-audiobookshelf/internal/pagination"
 	"github.com/chadmiller/opds-audiobookshelf/internal/placeholder"
 )
@@ -317,11 +317,19 @@ func buildEntryWithSeriesPrefix(baseURL string, b model.Book, updatedStr string,
 	return entry
 }
 
-// BuildRootFeed renders the root catalog as a selection menu with three browse options.
+// BuildRootFeed renders the root catalog as a selection menu with four browse options.
 func (AtomFeed) BuildRootFeed(baseURL, title string, books []model.Book, updatedAt time.Time) feeds.Feed {
 	feed := newFeed(baseURL, "/opds", NavigationMediaType, title, updatedAt)
-	feed.Entries = make([]Entry, 3)
+	feed.Entries = make([]Entry, 4)
 	feed.Entries[0] = Entry{
+		Title:   "Recently added",
+		ID:      "urn:opds:browse:recent",
+		Updated: feed.Updated,
+		Links: []Link{
+			{Rel: "subsection", Href: baseURL + "/opds/recent/", Type: MediaType},
+		},
+	}
+	feed.Entries[1] = Entry{
 		Title:   fmt.Sprintf("Find books by author (%d)", len(bookmeta.GroupByAuthor(books))),
 		ID:      "urn:opds:browse:authors",
 		Updated: feed.Updated,
@@ -329,7 +337,7 @@ func (AtomFeed) BuildRootFeed(baseURL, title string, books []model.Book, updated
 			{Rel: "subsection", Href: baseURL + "/opds/authors/", Type: NavigationMediaType},
 		},
 	}
-	feed.Entries[1] = Entry{
+	feed.Entries[2] = Entry{
 		Title:   fmt.Sprintf("Find books by title (%d)", len(bookmeta.GroupByTitle(books))),
 		ID:      "urn:opds:browse:titles",
 		Updated: feed.Updated,
@@ -337,7 +345,7 @@ func (AtomFeed) BuildRootFeed(baseURL, title string, books []model.Book, updated
 			{Rel: "subsection", Href: baseURL + "/opds/titles/", Type: NavigationMediaType},
 		},
 	}
-	feed.Entries[2] = Entry{
+	feed.Entries[3] = Entry{
 		Title:   fmt.Sprintf("Find books by series (%d)", len(bookmeta.GroupBySeries(books))),
 		ID:      "urn:opds:browse:series",
 		Updated: feed.Updated,
@@ -362,6 +370,21 @@ func (AtomFeed) BuildAuthorRangeFeed(baseURL string, books []model.Book, rangeID
 
 // BuildTitleNavigationFeed renders a navigation feed of titles (or ranges).
 // page is 1-indexed.
+// BuildRecentlyAdded renders the most recently added books as a single,
+// unpaginated acquisition feed, each titled with its series prefix.
+func (AtomFeed) BuildRecentlyAdded(baseURL string, books []model.Book, updatedAt time.Time) feeds.Feed {
+	recent := bookmeta.RecentlyAdded(books, bookmeta.RecentlyAddedLimit)
+	feed := newFeed(baseURL, "/opds/recent/", MediaType, "Recently added", updatedAt)
+	feed.Links = append(feed.Links, Link{Rel: "up", Href: baseURL + "/opds", Type: NavigationMediaType})
+
+	feed.Entries = make([]Entry, 0, len(recent))
+	padding := bookmeta.MaxSequencePadding(recent)
+	for _, b := range recent {
+		feed.Entries = append(feed.Entries, buildEntry(baseURL, b, feed.Updated, padding))
+	}
+	return feed
+}
+
 func (AtomFeed) BuildTitleNavigationFeed(baseURL string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
 	return buildCategoryNavigationFeed(baseURL, bookmeta.TitleCategory, bookmeta.TitleCategoryItems(books), page, updatedAt)
 }

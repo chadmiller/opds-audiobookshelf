@@ -2,6 +2,8 @@
 // scanned from Audiobookshelf (via its API or its sqlite database).
 package model
 
+import "time"
+
 // EbookFile mirrors the JSON shape Audiobookshelf stores in books.ebookFile.
 type EbookFile struct {
 	Ino      string `json:"ino"`
@@ -61,4 +63,8 @@ type Book struct {
 	// which is what -files-root stands in for on the host.
 	ItemPath    string
 	ItemRelPath string
+
+	// AddedAt is when Audiobookshelf first added the item to its library.
+	// Zero if unknown.
+	AddedAt time.Time
 }

@@ -1,7 +1,9 @@
 package bookmeta
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/chadmiller/opds-audiobookshelf/internal/model"
 )
@@ -100,9 +102,9 @@ func TestGroupByAuthorMultiAuthorBooks(t *testing.T) {
 	}
 
 	expectedAuthors := map[string]int{
-		"Smith, Jane":   2,
-		"Jones, Bob":    2,
-		"Brown, Carol":  1,
+		"Smith, Jane":  2,
+		"Jones, Bob":   2,
+		"Brown, Carol": 1,
 	}
 
 	for _, g := range groups {
@@ -119,15 +121,15 @@ func TestGroupByAuthorMultiAuthorBooks(t *testing.T) {
 
 func TestFormatTitleWithSeries(t *testing.T) {
 	tests := []struct {
-		name        string
-		book        model.Book
-		padding     int
-		expected    string
+		name     string
+		book     model.Book
+		padding  int
+		expected string
 	}{
 		{
-			name: "no series",
-			book: model.Book{Title: "Dune Messiah"},
-			padding: 2,
+			name:     "no series",
+			book:     model.Book{Title: "Dune Messiah"},
+			padding:  2,
 			expected: "Dune Messiah",
 		},
 		{
@@ -137,7 +139,7 @@ func TestFormatTitleWithSeries(t *testing.T) {
 				SeriesName:     "Dune",
 				SeriesSequence: "2",
 			},
-			padding: 2,
+			padding:  2,
 			expected: "(Dune #02) Dune Messiah",
 		},
 		{
@@ -147,7 +149,7 @@ func TestFormatTitleWithSeries(t *testing.T) {
 				SeriesName:     "Dune",
 				SeriesSequence: "2",
 			},
-			padding: 3,
+			padding:  3,
 			expected: "(Dune #002) Dune Messiah",
 		},
 		{
@@ -157,7 +159,7 @@ func TestFormatTitleWithSeries(t *testing.T) {
 				SeriesName:     "Dune",
 				SeriesSequence: "10",
 			},
-			padding: 2,
+			padding:  2,
 			expected: "(Dune #10) God Emperor of Dune",
 		},
 		{
@@ -167,7 +169,7 @@ func TestFormatTitleWithSeries(t *testing.T) {
 				SeriesName:     "Series",
 				SeriesSequence: "2.5",
 			},
-			padding: 3,
+			padding:  3,
 			expected: "(Series #002.5) Some Book",
 		},
 		{
@@ -177,7 +179,7 @@ func TestFormatTitleWithSeries(t *testing.T) {
 				SeriesName:     "Name",
 				SeriesSequence: "8.005",
 			},
-			padding: 1,
+			padding:  1,
 			expected: "(Name #8.005) Book",
 		},
 		{
@@ -187,7 +189,7 @@ func TestFormatTitleWithSeries(t *testing.T) {
 				SeriesName:     "Name",
 				SeriesSequence: "100.50",
 			},
-			padding: 3,
+			padding:  3,
 			expected: "(Name #100.5) Book",
 		},
 	}
@@ -318,5 +320,26 @@ func TestGroupBySeriesStripsArticles(t *testing.T) {
 		if groups[i].SortKey != expected.sortKey {
 			t.Errorf("group %d: expected SortKey %q, got %q", i, expected.sortKey, groups[i].SortKey)
 		}
+	}
+}
+
+func TestRecentlyAdded(t *testing.T) {
+	base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	var books []model.Book
+	for i := 0; i < 45; i++ {
+		books = append(books, model.Book{Title: fmt.Sprintf("b%02d", i), AddedAt: base.Add(time.Duration(i) * time.Hour)})
+	}
+	got := RecentlyAdded(books, RecentlyAddedLimit)
+	if len(got) != 40 {
+		t.Fatalf("got %d books, want 40", len(got))
+	}
+	if got[0].Title != "b44" || got[39].Title != "b05" {
+		t.Errorf("wrong order/cut: first %q last %q", got[0].Title, got[39].Title)
+	}
+	if books[0].Title != "b00" {
+		t.Error("input was modified")
+	}
+	if n := len(RecentlyAdded(books[:3], RecentlyAddedLimit)); n != 3 {
+		t.Errorf("got %d books, want 3", n)
 	}
 }

@@ -49,6 +49,7 @@ func New(store *catalog.Store, files catalog.Files, title string) *Server {
 	s.mux.HandleFunc("/opds/", s.handleRoot)
 	s.mux.HandleFunc("/opds", s.handleRoot)
 	s.mux.HandleFunc("/", s.handleRoot)
+	s.mux.HandleFunc("/opds/recent/", s.handleRecent)
 	s.mux.HandleFunc("/opds/authors/", s.handleAuthorOrRange)
 	s.mux.HandleFunc("/opds/titles/", s.handleTitleOrRange)
 	s.mux.HandleFunc("/opds/series/", s.handleSeriesOrRange)
@@ -73,7 +74,7 @@ func getPage(r *http.Request) int {
 	return page
 }
 
-// handleRoot serves the catalog root as a selection menu with three browse options.
+// handleRoot serves the catalog root as a selection menu with four browse options.
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" && r.URL.Path != "/opds" {
 		http.NotFound(w, r)
@@ -84,6 +85,16 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	builder := negotiateBuilder(r)
 
 	writeFeed(w, r, builder.BuildRootFeed(base, s.title, books, updatedAt))
+}
+
+// handleRecent serves the flat list of the most recently added books.
+func (s *Server) handleRecent(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/opds/recent/" {
+		http.NotFound(w, r)
+		return
+	}
+	books, updatedAt := s.store.Get()
+	writeFeed(w, r, negotiateBuilder(r).BuildRecentlyAdded("", books, updatedAt))
 }
 
 // handleAuthorOrRange serves either a navigation feed of authors/ranges (if no ID or

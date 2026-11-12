@@ -6,11 +6,12 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 const goodItem = `{
   "id": "li_1", "path": "/ebooks/Weir/Hail Mary", "relPath": "Weir/Hail Mary",
-  "mediaType": "book",
+  "mediaType": "book", "addedAt": 1700000000000,
   "media": {
     "coverPath": "/ebooks/Weir/Hail Mary/cover.jpg", "tags": ["scifi"],
     "metadata": {
@@ -82,7 +83,8 @@ func TestScan(t *testing.T) {
 		b.SeriesName != "Solo" || b.SeriesSequence != "1" ||
 		b.Ebook.Metadata.Path != "/ebooks/Weir/Hail Mary/phm.epub" ||
 		b.CoverPath != "/ebooks/Weir/Hail Mary/cover.jpg" ||
-		b.ItemRelPath != "Weir/Hail Mary" || len(b.Tags) != 1 {
+		b.ItemRelPath != "Weir/Hail Mary" || len(b.Tags) != 1 ||
+		!b.AddedAt.Equal(time.UnixMilli(1700000000000)) {
 		t.Errorf("unexpected book: %+v", b)
 	}
 }

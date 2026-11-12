@@ -16,6 +16,22 @@ import (
 
 const RangeGroupThreshold = 60
 
+// RecentlyAddedLimit is the most books the "recently added" feed lists.
+const RecentlyAddedLimit = 40
+
+// RecentlyAdded returns up to limit books, most recently added first. Ties
+// (including books with no AddedAt) keep their input order. books is not
+// modified.
+func RecentlyAdded(books []model.Book, limit int) []model.Book {
+	sorted := make([]model.Book, len(books))
+	copy(sorted, books)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].AddedAt.After(sorted[j].AddedAt) })
+	if len(sorted) > limit {
+		sorted = sorted[:limit]
+	}
+	return sorted
+}
+
 // FormatTitle returns the book title with series information prepended if
 // available. Series prefix is formatted as "(Series Name #n)" with zero-padded
 // numbers dynamically sized to fit the largest sequence number.
