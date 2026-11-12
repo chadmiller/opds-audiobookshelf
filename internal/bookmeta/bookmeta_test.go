@@ -11,19 +11,19 @@ import (
 func TestGroupByAuthorSplitsMultipleAuthors(t *testing.T) {
 	books := []model.Book{
 		{
-			LibraryItemID:        "book1",
-			Title:                "The Martian",
-			AuthorNamesLastFirst: "Weir, Andy",
+			LibraryItemID: "book1",
+			Title:         "The Martian",
+			Authors:       []string{"Weir, Andy"},
 		},
 		{
-			LibraryItemID:        "book2",
-			Title:                "Hail to the Chief",
-			AuthorNamesLastFirst: "Smith, Jane; Weir, Andy",
+			LibraryItemID: "book2",
+			Title:         "Hail to the Chief",
+			Authors:       []string{"Smith, Jane", "Weir, Andy"},
 		},
 		{
-			LibraryItemID:        "book3",
-			Title:                "Another Book",
-			AuthorNamesLastFirst: "Smith, Jane",
+			LibraryItemID: "book3",
+			Title:         "Another Book",
+			Authors:       []string{"Smith, Jane"},
 		},
 	}
 
@@ -49,48 +49,22 @@ func TestGroupByAuthorSplitsMultipleAuthors(t *testing.T) {
 	}
 }
 
-func TestSplitAuthors(t *testing.T) {
-	tests := []struct {
-		input string
-		want  []string
-	}{
-		{"Weir, Andy", []string{"Weir, Andy"}},
-		{"Smith, Jane; Weir, Andy", []string{"Smith, Jane", "Weir, Andy"}},
-		{"Smith, Jane; Weir, Andy; Johnson, Bob", []string{"Smith, Jane", "Weir, Andy", "Johnson, Bob"}},
-		{"", []string{"Unknown Author"}},
-		{"   ", []string{"Unknown Author"}},
-	}
-
-	for _, test := range tests {
-		got := splitAuthors(test.input)
-		if len(got) != len(test.want) {
-			t.Errorf("splitAuthors(%q): got %d authors, want %d", test.input, len(got), len(test.want))
-			continue
-		}
-		for i, want := range test.want {
-			if got[i] != want {
-				t.Errorf("splitAuthors(%q): got %q at position %d, want %q", test.input, got[i], i, want)
-			}
-		}
-	}
-}
-
 func TestGroupByAuthorMultiAuthorBooks(t *testing.T) {
 	books := []model.Book{
 		{
-			LibraryItemID:        "book1",
-			Title:                "Collaborative Work",
-			AuthorNamesLastFirst: "Smith, Jane; Jones, Bob",
+			LibraryItemID: "book1",
+			Title:         "Collaborative Work",
+			Authors:       []string{"Smith, Jane", "Jones, Bob"},
 		},
 		{
-			LibraryItemID:        "book2",
-			Title:                "Solo Work",
-			AuthorNamesLastFirst: "Smith, Jane",
+			LibraryItemID: "book2",
+			Title:         "Solo Work",
+			Authors:       []string{"Smith, Jane"},
 		},
 		{
-			LibraryItemID:        "book3",
-			Title:                "Another Collaboration",
-			AuthorNamesLastFirst: "Jones, Bob; Brown, Carol",
+			LibraryItemID: "book3",
+			Title:         "Another Collaboration",
+			Authors:       []string{"Jones, Bob", "Brown, Carol"},
 		},
 	}
 

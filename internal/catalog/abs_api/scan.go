@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chadmiller/opds-audiobookshelf/internal/bookmeta"
 	"github.com/chadmiller/opds-audiobookshelf/internal/model"
 )
 
@@ -70,7 +71,6 @@ type metadata struct {
 	Language          string   `json:"language"`
 	Narrators         []string `json:"narrators"`
 	Genres            []string `json:"genres"`
-	AuthorName        string   `json:"authorName"`
 	AuthorNameLF      string   `json:"authorNameLF"`
 	Authors           []struct {
 		Name string `json:"name"`
@@ -160,35 +160,42 @@ func itemToBook(item libraryItem) (book model.Book, skipReason string) {
 	}
 
 	m := item.Media.Metadata
-	authorName := m.AuthorName
-	if authorName == "" {
-		names := make([]string, len(m.Authors))
-		for i, a := range m.Authors {
-			names[i] = a.Name
+	var authors []string
+	for _, a := range m.Authors {
+		if name := bookmeta.LastFirst(a.Name); name != "" {
+			authors = append(authors, name)
 		}
-		authorName = strings.Join(names, ", ")
+	}
+	if len(authors) == 0 {
+		for _, name := range strings.Split(m.AuthorNameLF, "; ") {
+			if name = strings.TrimSpace(name); name != "" {
+				authors = append(authors, name)
+			}
+		}
+	}
+	if len(authors) == 0 {
+		return book, "it has no author"
 	}
 	book = model.Book{
-		LibraryItemID:        item.ID,
-		ItemPath:             item.Path,
-		ItemRelPath:          item.RelPath,
-		AuthorName:           authorName,
-		AuthorNamesLastFirst: m.AuthorNameLF,
-		Title:                m.Title,
-		TitleIgnorePrefix:    m.TitleIgnorePrefix,
-		Subtitle:             m.Subtitle,
-		PublishedYear:        m.PublishedYear,
-		PublishedDate:        m.PublishedDate,
-		Publisher:            m.Publisher,
-		Description:          m.Description,
-		ISBN:                 m.ISBN,
-		ASIN:                 m.ASIN,
-		Language:             m.Language,
-		Narrators:            m.Narrators,
-		Tags:                 item.Media.Tags,
-		Genres:               m.Genres,
-		CoverPath:            item.Media.CoverPath,
-		Ebook:                *item.Media.EbookFile,
+		LibraryItemID:     item.ID,
+		ItemPath:          item.Path,
+		ItemRelPath:       item.RelPath,
+		Authors:           authors,
+		Title:             m.Title,
+		TitleIgnorePrefix: m.TitleIgnorePrefix,
+		Subtitle:          m.Subtitle,
+		PublishedYear:     m.PublishedYear,
+		PublishedDate:     m.PublishedDate,
+		Publisher:         m.Publisher,
+		Description:       m.Description,
+		ISBN:              m.ISBN,
+		ASIN:              m.ASIN,
+		Language:          m.Language,
+		Narrators:         m.Narrators,
+		Tags:              item.Media.Tags,
+		Genres:            m.Genres,
+		CoverPath:         item.Media.CoverPath,
+		Ebook:             *item.Media.EbookFile,
 	}
 	if item.AddedAt > 0 {
 		book.AddedAt = time.UnixMilli(item.AddedAt)

@@ -18,7 +18,6 @@ SELECT
 	li.id,
 	li.path,
 	li.relPath,
-	li.authorNamesFirstLast,
 	COALESCE(GROUP_CONCAT(a.lastFirst, '; ' ORDER BY ba.createdAt ASC), '') as authorNamesLastFirst,
 	b.title,
 	b.titleIgnorePrefix,
@@ -94,7 +93,6 @@ func (sc Client) Scan(libraryNames []string) ([]model.Book, error) {
 			id                   string
 			itemPath             sql.NullString
 			itemRelPath          sql.NullString
-			authorNamesFirstLast sql.NullString
 			authorNamesLastFirst sql.NullString
 			title                sql.NullString
 			titleIgnorePrefix    sql.NullString
@@ -125,7 +123,6 @@ func (sc Client) Scan(libraryNames []string) ([]model.Book, error) {
 			&id,
 			&itemPath,
 			&itemRelPath,
-			&authorNamesFirstLast,
 			&authorNamesLastFirst,
 			&title,
 			&titleIgnorePrefix,
@@ -193,29 +190,39 @@ func (sc Client) Scan(libraryNames []string) ([]model.Book, error) {
 			continue
 		}
 
+		var authors []string
+		for _, name := range strings.Split(authorNamesLastFirst.String, "; ") {
+			if name = strings.TrimSpace(name); name != "" {
+				authors = append(authors, name)
+			}
+		}
+		if len(authors) == 0 {
+			fmt.Printf("Skipping book because it has no author: %s\n", id)
+			continue
+		}
+
 		book := model.Book{
-			LibraryItemID:        id,
-			ItemPath:             itemPath.String,
-			ItemRelPath:          itemRelPath.String,
-			AuthorName:           authorNamesFirstLast.String,
-			AuthorNamesLastFirst: authorNamesLastFirst.String,
-			Title:                title.String,
-			TitleIgnorePrefix:    titleIgnorePrefix.String,
-			Subtitle:             subtitle.String,
-			PublishedYear:        publishedYear.String,
-			PublishedDate:        publishedDate.String,
-			Publisher:            publisher.String,
-			Description:          description.String,
-			ISBN:                 isbn.String,
-			ASIN:                 asin.String,
-			Language:             language.String,
-			CoverPath:            coverPath.String,
-			SeriesName:           seriesName.String,
-			SeriesSequence:       seriesSequence.String,
-			Narrators:            stringSlice(narratorsJSON),
-			Tags:                 stringSlice(tagsJSON),
-			Genres:               stringSlice(genresJSON),
-			Ebook:                ebook,
+			LibraryItemID:     id,
+			ItemPath:          itemPath.String,
+			ItemRelPath:       itemRelPath.String,
+			Authors:           authors,
+			Title:             title.String,
+			TitleIgnorePrefix: titleIgnorePrefix.String,
+			Subtitle:          subtitle.String,
+			PublishedYear:     publishedYear.String,
+			PublishedDate:     publishedDate.String,
+			Publisher:         publisher.String,
+			Description:       description.String,
+			ISBN:              isbn.String,
+			ASIN:              asin.String,
+			Language:          language.String,
+			CoverPath:         coverPath.String,
+			SeriesName:        seriesName.String,
+			SeriesSequence:    seriesSequence.String,
+			Narrators:         stringSlice(narratorsJSON),
+			Tags:              stringSlice(tagsJSON),
+			Genres:            stringSlice(genresJSON),
+			Ebook:             ebook,
 		}
 		books = append(books, book)
 	}

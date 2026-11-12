@@ -278,8 +278,8 @@ func buildPublication(baseURL string, b model.Book, padding int) Publication {
 
 func buildPublicationWithSeriesPrefix(baseURL string, b model.Book, padding int, includeSeriesPrefix bool) Publication {
 	var authors []Author
-	if b.AuthorName != "" {
-		authors = append(authors, Author{Name: b.AuthorName})
+	for _, a := range b.Authors {
+		authors = append(authors, Author{Name: a})
 	}
 	var narrators []Author
 	for _, n := range b.Narrators {

@@ -29,11 +29,9 @@ type Book struct {
 	ISBN          string
 	ASIN          string
 	Language      string
-	AuthorName    string
-	// AuthorNamesLastFirst is libraryItems.authorNamesLastFirst, e.g.
-	// "Weir, Andy" — Audiobookshelf's own "surname, given name" ordering,
-	// used as the primary sort key.
-	AuthorNamesLastFirst string
+	// Authors lists every author as "Surname, Given Name", e.g. "Weir, Andy".
+	// Scanners guarantee at least one entry; authorless books are skipped.
+	Authors []string
 	// TitleIgnorePrefix is books.titleIgnorePrefix, the title with any
 	// leading article ("The", "A", ...) stripped for sorting purposes.
 	// Empty if Audiobookshelf didn't record one, in which case Title is

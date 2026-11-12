@@ -1,6 +1,7 @@
 package abs_api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -79,7 +80,7 @@ func TestScan(t *testing.T) {
 	}
 	b := books[0]
 	if b.LibraryItemID != "li_1" || b.Title != "Project Hail Mary" ||
-		b.AuthorName != "Andy Weir" || b.AuthorNamesLastFirst != "Weir, Andy" ||
+		len(b.Authors) != 1 || b.Authors[0] != "Weir, Andy" ||
 		b.SeriesName != "Solo" || b.SeriesSequence != "1" ||
 		b.Ebook.Metadata.Path != "/ebooks/Weir/Hail Mary/phm.epub" ||
 		b.CoverPath != "/ebooks/Weir/Hail Mary/cover.jpg" ||
@@ -99,5 +100,37 @@ func TestScanErrors(t *testing.T) {
 	}
 	if _, err := (Client{Address: srv.URL, APIKey: "secret"}).Scan(nil); err == nil {
 		t.Error("no libraries: want error")
+	}
+}
+
+func TestItemToBookAuthors(t *testing.T) {
+	mk := func(md string) libraryItem {
+		var it libraryItem
+		js := `{"id":"x","mediaType":"book","media":{"metadata":` + md + `,"ebookFile":{"metadata":{"path":"/p"}}}}`
+		if err := json.Unmarshal([]byte(js), &it); err != nil {
+			t.Fatal(err)
+		}
+		return it
+	}
+	tests := []struct {
+		name string
+		md   string
+		want []string
+	}{
+		{"authors array converted", `{"authors":[{"name":"Andy Weir"},{"name":"Jane Q. Public"}],"authorNameLF":"ignored, Me"}`, []string{"Weir, Andy", "Public, Jane Q."}},
+		{"LF fallback", `{"authorNameLF":"Weir, Andy; Smith, Jane"}`, []string{"Weir, Andy", "Smith, Jane"}},
+		{"none", `{"authorName":"Someone"}`, nil},
+	}
+	for _, tt := range tests {
+		book, reason := itemToBook(mk(tt.md))
+		if tt.want == nil {
+			if reason == "" {
+				t.Errorf("%s: want skip, got %+v", tt.name, book)
+			}
+			continue
+		}
+		if reason != "" || strings.Join(book.Authors, "|") != strings.Join(tt.want, "|") {
+			t.Errorf("%s: got %v (%q), want %v", tt.name, book.Authors, reason, tt.want)
+		}
 	}
 }

@@ -163,14 +163,8 @@ func SortBooks(books []model.Book) {
 }
 
 func less(a, b model.Book, padding int) bool {
-	aSurname, aGiven := splitSurnameGiven(a.AuthorNamesLastFirst)
-	bSurname, bGiven := splitSurnameGiven(b.AuthorNamesLastFirst)
-
-	if al, bl := strings.ToLower(aSurname), strings.ToLower(bSurname); al != bl {
-		return al < bl
-	}
-	if al, bl := strings.ToLower(aGiven), strings.ToLower(bGiven); al != bl {
-		return al < bl
+	if c := compareAuthors(a.Authors, b.Authors); c != 0 {
+		return c < 0
 	}
 	if al, bl := strings.ToLower(titleSortKey(a, padding)), strings.ToLower(titleSortKey(b, padding)); al != bl {
 		return al < bl
@@ -196,7 +190,50 @@ func splitSurnameGiven(lastFirst string) (surname, given string) {
 	return strings.TrimSpace(surname), strings.TrimSpace(given)
 }
 
-const unknownAuthor = "Unknown Author"
+// compareAuthors orders two author lists: each is sorted (on a copy), then the
+// lists are compared pairwise by surname and given name, case-insensitively.
+// If one list is a prefix of the other, the shorter sorts first. It returns
+// a negative, zero, or positive number.
+func compareAuthors(a, b []string) int {
+	a, b = sortedAuthors(a), sortedAuthors(b)
+	for i := 0; i < len(a) && i < len(b); i++ {
+		aSurname, aGiven := splitSurnameGiven(a[i])
+		bSurname, bGiven := splitSurnameGiven(b[i])
+		if c := strings.Compare(aSurname, bSurname); c != 0 {
+			return c
+		}
+		if c := strings.Compare(aGiven, bGiven); c != 0 {
+			return c
+		}
+	}
+	return len(a) - len(b)
+}
+
+// sortedAuthors returns a lowercased, sorted copy of authors.
+func sortedAuthors(authors []string) []string {
+	out := make([]string, len(authors))
+	for i, a := range authors {
+		out[i] = strings.ToLower(a)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// LastFirst converts "Given X. Y. Z. Surname" to "Surname, Given X. Y. Z.",
+// treating the last whitespace-separated word as the surname. A name that is
+// a single word or already contains a comma is returned trimmed but otherwise
+// unchanged.
+func LastFirst(name string) string {
+	name = strings.TrimSpace(name)
+	if strings.Contains(name, ",") {
+		return name
+	}
+	i := strings.LastIndexAny(name, " \t")
+	if i < 0 {
+		return name
+	}
+	return name[i+1:] + ", " + strings.TrimSpace(name[:i])
+}
 
 // AuthorGroup is one author's books, used to render the two-level
 // author -> works catalog hierarchy.
@@ -204,30 +241,9 @@ type AuthorGroup struct {
 	// ID is a URL-safe slug identifying this author, stable for the
 	// lifetime of one scan (used to build /opds/authors/{ID}).
 	ID string
-	// DisplayName is Audiobookshelf's "Surname, Given Name" string, or
-	// "Unknown Author" if the book(s) have no author on file.
+	// DisplayName is the author's "Surname, Given Name" string.
 	DisplayName string
 	Books       []model.Book
-}
-
-// splitAuthors splits a semicolon-separated author string into individual
-// author names, trimming whitespace.
-func splitAuthors(authorList string) []string {
-	if authorList == "" {
-		return []string{unknownAuthor}
-	}
-	parts := strings.Split(authorList, "; ")
-	var result []string
-	for _, part := range parts {
-		trimmed := strings.TrimSpace(part)
-		if trimmed != "" {
-			result = append(result, trimmed)
-		}
-	}
-	if len(result) == 0 {
-		return []string{unknownAuthor}
-	}
-	return result
 }
 
 // GroupByAuthor splits a book list already ordered by SortBooks into
@@ -240,8 +256,7 @@ func GroupByAuthor(books []model.Book) []AuthorGroup {
 	usedIDs := map[string]bool{}
 
 	for _, b := range books {
-		authorNames := splitAuthors(b.AuthorNamesLastFirst)
-		for _, display := range authorNames {
+		for _, display := range b.Authors {
 			id, exists := authorToID[display]
 			if !exists {
 				base := authorSlug(display)
