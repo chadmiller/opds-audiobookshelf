@@ -112,6 +112,6 @@ func runScan(store *catalog.Store, backend catalog.Backend, libraryNames []strin
 	if store.Equal(books) {
 		return
 	}
-	store.Set(books, time.Now())
+	store.Set(books, start)
 	log.Printf("scan updates catalog to %d ebooks after taking %s", len(books), time.Since(start))
 }
