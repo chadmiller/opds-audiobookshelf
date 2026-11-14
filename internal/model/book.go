@@ -39,9 +39,13 @@ type Book struct {
 	TitleIgnorePrefix string
 	SeriesName        string
 	SeriesSequence    string
-	Narrators         []string
-	Tags              []string
-	Genres            []string
+	// SoleInSeries is set when SeriesName is non-empty but no other book in
+	// the catalog shares it. Such a series is treated as nonexistent for
+	// display and grouping.
+	SoleInSeries bool
+	Narrators    []string
+	Tags         []string
+	Genres       []string
 
 	// CoverPath is the container-rooted absolute path to the cover image,
 	// or empty if the book has no cover.

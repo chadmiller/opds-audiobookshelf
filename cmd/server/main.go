@@ -108,6 +108,7 @@ func runScan(store *catalog.Store, backend catalog.Backend, libraryNames []strin
 	for i := range books {
 		books[i].CoverResolvable = backend.CoverExists(books[i])
 	}
+	bookmeta.MarkSoleInSeries(books)
 	bookmeta.SortBooks(books)
 	if store.Equal(books) {
 		return

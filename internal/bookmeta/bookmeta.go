@@ -32,11 +32,23 @@ func RecentlyAdded(books []model.Book, limit int) []model.Book {
 	return sorted
 }
 
+// MarkSoleInSeries sets SoleInSeries, in place, on every book whose series
+// contains no other book in the list.
+func MarkSoleInSeries(books []model.Book) {
+	counts := make(map[string]int)
+	for _, b := range books {
+		counts[b.SeriesName]++
+	}
+	for i := range books {
+		books[i].SoleInSeries = books[i].SeriesName != "" && counts[books[i].SeriesName] == 1
+	}
+}
+
 // FormatTitle returns the book title with series information prepended if
 // available. Series prefix is formatted as "(Series Name #n)" with zero-padded
 // numbers dynamically sized to fit the largest sequence number.
 func FormatTitle(b model.Book, padding int) string {
-	if b.SeriesName == "" || b.SeriesSequence == "" {
+	if b.SeriesName == "" || b.SeriesSequence == "" || b.SoleInSeries {
 		return b.Title
 	}
 	paddedSeq := padSequence(b.SeriesSequence, padding)
@@ -174,7 +186,7 @@ func less(a, b model.Book, padding int) bool {
 
 func titleSortKey(b model.Book, padding int) string {
 	formatted := FormatTitle(b, padding)
-	if b.TitleIgnorePrefix != "" && b.SeriesName == "" {
+	if b.TitleIgnorePrefix != "" && (b.SeriesName == "" || b.SoleInSeries) {
 		return b.TitleIgnorePrefix
 	}
 	return formatted
@@ -357,17 +369,17 @@ type SeriesGroup struct {
 }
 
 // GroupBySeries splits books into groups by series name, sorted alphabetically.
-// Books without a series are grouped under "Standalone".
+// Books without a series, and books that are the only one in their series,
+// are omitted.
 func GroupBySeries(books []model.Book) []SeriesGroup {
-	const standalone = "Standalone"
 	groups := make(map[string]*SeriesGroup)
 	var order []string
 	usedIDs := map[string]bool{}
 
 	for _, b := range books {
 		seriesName := b.SeriesName
-		if seriesName == "" {
-			seriesName = standalone
+		if seriesName == "" || b.SoleInSeries {
+			continue
 		}
 
 		if _, exists := groups[seriesName]; !exists {
