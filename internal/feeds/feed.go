@@ -44,6 +44,10 @@ type Builder interface {
 	BuildTitleNavigationFeed(baseURL string, books []model.Book, page int, updatedAt time.Time) Feed
 	BuildTitleRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) Feed
 
+	// BuildCollectionFeed renders the books of one collection, identified by
+	// the ID from bookmeta.GroupByCollection.
+	BuildCollectionFeed(baseURL, collectionID, collectionName string, books []model.Book, page int, updatedAt time.Time) Feed
+
 	BuildSeriesFeed(baseURL, seriesID, seriesName string, books []model.Book, page int, updatedAt time.Time) Feed
 	BuildSeriesNavigationFeed(baseURL string, books []model.Book, page int, updatedAt time.Time) Feed
 	BuildSeriesRangeFeed(baseURL string, books []model.Book, rangeID string, page int, updatedAt time.Time) Feed

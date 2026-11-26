@@ -320,7 +320,7 @@ func buildEntryWithSeriesPrefix(baseURL string, b model.Book, updatedStr string,
 // BuildRootFeed renders the root catalog as a selection menu with four browse options.
 func (AtomFeed) BuildRootFeed(baseURL, title string, books []model.Book, updatedAt time.Time) feeds.Feed {
 	feed := newFeed(baseURL, "/opds", NavigationMediaType, title, updatedAt)
-	feed.Entries = make([]Entry, 4)
+	feed.Entries = make([]Entry, 4, 4+len(bookmeta.GroupByCollection(books)))
 	feed.Entries[0] = Entry{
 		Title:   "Recently added",
 		ID:      "urn:opds:browse:recent",
@@ -352,6 +352,16 @@ func (AtomFeed) BuildRootFeed(baseURL, title string, books []model.Book, updated
 		Links: []Link{
 			{Rel: "subsection", Href: baseURL + "/opds/series/", Type: NavigationMediaType},
 		},
+	}
+	for _, g := range bookmeta.GroupByCollection(books) {
+		feed.Entries = append(feed.Entries, Entry{
+			Title:   fmt.Sprintf("%s (%d)", g.Name, len(g.Books)),
+			ID:      "urn:opds:browse:collections:" + g.ID,
+			Updated: feed.Updated,
+			Links: []Link{
+				{Rel: "subsection", Href: baseURL + "/opds/collections/" + g.ID, Type: AcquisitionMediaType},
+			},
+		})
 	}
 	return feed
 }
@@ -459,6 +469,24 @@ func (AtomFeed) BuildSeriesFeed(baseURL, seriesID, seriesName string, books []mo
 
 	feed := newFeed(baseURL, selfPath+pageQueryString(page), AcquisitionMediaType, seriesName, updatedAt)
 	feed.Links = append(feed.Links, Link{Rel: "up", Href: baseURL + "/opds/series/", Type: NavigationMediaType})
+	feed.Links = append(feed.Links, paginationLinks(baseURL, selfPath, page, totalPages, AcquisitionMediaType)...)
+
+	feed.Entries = make([]Entry, 0, len(pageBooks))
+	padding := bookmeta.MaxSequencePadding(pageBooks)
+	for _, b := range pageBooks {
+		feed.Entries = append(feed.Entries, buildEntry(baseURL, b, feed.Updated, padding))
+	}
+	return feed
+}
+
+// BuildCollectionFeed renders all books in one collection as an acquisition feed.
+// page is 1-indexed.
+func (AtomFeed) BuildCollectionFeed(baseURL, collectionID, collectionName string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
+	pageBooks, _, totalPages := pagination.Paginate(books, page)
+	selfPath := "/opds/collections/" + collectionID
+
+	feed := newFeed(baseURL, selfPath+pageQueryString(page), AcquisitionMediaType, collectionName, updatedAt)
+	feed.Links = append(feed.Links, Link{Rel: "up", Href: baseURL + "/opds", Type: NavigationMediaType})
 	feed.Links = append(feed.Links, paginationLinks(baseURL, selfPath, page, totalPages, AcquisitionMediaType)...)
 
 	feed.Entries = make([]Entry, 0, len(pageBooks))

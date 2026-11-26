@@ -52,6 +52,16 @@ WHERE l.name IN (%s)
 GROUP BY li.id
 `
 
+const collectionsQueryTemplate = `
+SELECT li.id, c.name
+FROM "collections" c
+JOIN "collectionBooks" cb ON cb.collectionId = c.id
+JOIN "libraryItems" li ON li.mediaId = cb.bookId
+JOIN "libraries" l ON li.libraryId = l.id
+WHERE l.name IN (%s)
+ORDER BY c.name
+`
+
 // Scanner is a catalog.Source that reads the sqlite database at Path.
 type Client struct {
 	Path      string
@@ -230,7 +240,38 @@ func (sc Client) Scan(libraryNames []string) ([]model.Book, error) {
 		return nil, fmt.Errorf("iterate rows: %w", err)
 	}
 
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close rows: %w", err)
+	}
+
+	collections, err := scanCollections(db, placeholders, args)
+	if err != nil {
+		fmt.Printf("Ignoring collections because listing failed: %v\n", err)
+	}
+	for i := range books {
+		books[i].Collections = collections[books[i].LibraryItemID]
+	}
+
 	return books, nil
+}
+
+// scanCollections maps each library item ID to the names of the collections
+// containing it.
+func scanCollections(db *sql.DB, placeholders []string, args []any) (map[string][]string, error) {
+	rows, err := db.Query(fmt.Sprintf(collectionsQueryTemplate, strings.Join(placeholders, ", ")), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]string{}
+	for rows.Next() {
+		var id, name string
+		if err := rows.Scan(&id, &name); err != nil {
+			return nil, err
+		}
+		out[id] = append(out[id], name)
+	}
+	return out, rows.Err()
 }
 
 func stringSlice(ns sql.NullString) []string {

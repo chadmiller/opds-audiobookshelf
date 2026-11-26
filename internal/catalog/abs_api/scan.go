@@ -108,6 +108,10 @@ func (c Client) Scan(libraryNames []string) ([]model.Book, error) {
 		if err != nil {
 			return nil, fmt.Errorf("list items of library %q: %w", name, err)
 		}
+		collections, err := c.collectionsByItem(id)
+		if err != nil {
+			log.Printf("Ignoring collections of library %q because listing failed: %v", name, err)
+		}
 		for _, itemID := range itemIDs {
 			var item libraryItem
 			if err := c.get("/api/items/"+url.PathEscape(itemID), nil, &item); err != nil {
@@ -117,11 +121,35 @@ func (c Client) Scan(libraryNames []string) ([]model.Book, error) {
 			if book, reason := itemToBook(item); reason != "" {
 				log.Printf("Skipping book because %s: %s", reason, itemID)
 			} else {
+				book.Collections = collections[itemID]
 				books = append(books, book)
 			}
 		}
 	}
 	return books, nil
+}
+
+// collectionsByItem maps each library item ID to the names of the
+// collections containing it.
+func (c Client) collectionsByItem(libraryID string) (map[string][]string, error) {
+	var resp struct {
+		Results []struct {
+			Name  string `json:"name"`
+			Books []struct {
+				ID string `json:"id"`
+			} `json:"books"`
+		} `json:"results"`
+	}
+	if err := c.get("/api/libraries/"+url.PathEscape(libraryID)+"/collections", nil, &resp); err != nil {
+		return nil, err
+	}
+	out := map[string][]string{}
+	for _, col := range resp.Results {
+		for _, b := range col.Books {
+			out[b.ID] = append(out[b.ID], col.Name)
+		}
+	}
+	return out, nil
 }
 
 func (c Client) listItemIDs(libraryID string) ([]string, error) {

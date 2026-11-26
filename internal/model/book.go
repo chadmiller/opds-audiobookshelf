@@ -46,6 +46,8 @@ type Book struct {
 	Narrators    []string
 	Tags         []string
 	Genres       []string
+	// Collections names the Audiobookshelf collections this book belongs to.
+	Collections []string
 
 	// CoverPath is the container-rooted absolute path to the cover image,
 	// or empty if the book has no cover.

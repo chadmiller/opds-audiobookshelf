@@ -53,6 +53,7 @@ func New(store *catalog.Store, files catalog.Files, title string) *Server {
 	s.mux.HandleFunc("/opds/authors/", s.handleAuthorOrRange)
 	s.mux.HandleFunc("/opds/titles/", s.handleTitleOrRange)
 	s.mux.HandleFunc("/opds/series/", s.handleSeriesOrRange)
+	s.mux.HandleFunc("/opds/collections/", s.handleCollection)
 	s.mux.HandleFunc("/opds/-/download/", s.handleDownload)
 	s.mux.HandleFunc("/opds/-/covers/", s.handleCover)
 	return s
@@ -181,6 +182,19 @@ func (s *Server) handleSeriesOrRange(w http.ResponseWriter, r *http.Request) {
 	} else {
 		writeFeed(w, r, builder.BuildSeriesFeed(base, group.ID, group.Name, group.Books, page, updatedAt))
 	}
+}
+
+// handleCollection serves the books of one Audiobookshelf collection.
+func (s *Server) handleCollection(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/opds/collections/")
+	books, updatedAt := s.store.Get()
+	for _, g := range bookmeta.GroupByCollection(books) {
+		if g.ID == id {
+			writeFeed(w, r, negotiateBuilder(r).BuildCollectionFeed("", g.ID, g.Name, g.Books, getPage(r), updatedAt))
+			return
+		}
+	}
+	http.NotFound(w, r)
 }
 
 // writeFeed encodes feed and writes it with an explicit Content-Length

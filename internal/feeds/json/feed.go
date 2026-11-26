@@ -376,6 +376,14 @@ func (JSONFeed) BuildRootFeed(baseURL, title string, books []model.Book, updated
 			},
 		},
 	}
+	for _, g := range bookmeta.GroupByCollection(books) {
+		feed.Navigation = append(feed.Navigation, Link{
+			Href:  baseURL + "/opds/collections/" + g.ID,
+			Type:  MediaType,
+			Title: fmt.Sprintf("%s (%d)", g.Name, len(g.Books)),
+		})
+	}
+	feed.Metadata.ItemsPerPage = len(feed.Navigation)
 	if !updatedAt.IsZero() {
 		feed.Metadata.Modified = updatedAt.UTC().Format(time.RFC3339)
 	}
@@ -531,6 +539,35 @@ func (JSONFeed) BuildSeriesFeed(baseURL, seriesID, seriesName string, books []mo
 		Links: []Link{
 			{Rel: "self", Href: baseURL + selfPath + pageQueryString(page), Type: MediaType},
 			{Rel: "up", Href: baseURL + "/opds/series/", Type: MediaType},
+		},
+		Publications: make([]Publication, 0, len(pageBooks)),
+	}
+	if !updatedAt.IsZero() {
+		feed.Metadata.Modified = updatedAt.UTC().Format(time.RFC3339)
+	}
+	feed.Links = append(feed.Links, paginationLinks(baseURL, selfPath, page, totalPages, MediaType)...)
+
+	padding := bookmeta.MaxSequencePadding(pageBooks)
+	for _, b := range pageBooks {
+		feed.Publications = append(feed.Publications, buildPublication(baseURL, b, padding))
+	}
+	return feed
+}
+
+// BuildCollectionFeed renders all books in one collection as an acquisition feed.
+// page is 1-indexed.
+func (JSONFeed) BuildCollectionFeed(baseURL, collectionID, collectionName string, books []model.Book, page int, updatedAt time.Time) feeds.Feed {
+	pageBooks, _, totalPages := pagination.Paginate(books, page)
+	selfPath := "/opds/collections/" + collectionID
+
+	feed := Feed{
+		Metadata: FeedMetadata{
+			Title:        collectionName,
+			ItemsPerPage: pagination.PageSize,
+		},
+		Links: []Link{
+			{Rel: "self", Href: baseURL + selfPath + pageQueryString(page), Type: MediaType},
+			{Rel: "up", Href: baseURL + "/opds", Type: MediaType},
 		},
 		Publications: make([]Publication, 0, len(pageBooks)),
 	}
